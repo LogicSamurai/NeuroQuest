@@ -42,7 +42,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     <LeaderboardPageClient
                         entries={entries}
                         userRank={userRank}
-                        currentUserId={currentUserId}
+                        currentUserId={currentUserId || ""}
                         games={GAMES}
                         periods={PERIODS}
                         selectedGame={selectedGame}

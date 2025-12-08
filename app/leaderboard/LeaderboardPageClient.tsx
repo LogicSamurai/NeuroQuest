@@ -46,7 +46,7 @@ interface LeaderboardPageClientProps {
         score: number;
         percentile: number | null;
         totalPlayers: number;
-    };
+    } | null;
     currentUserId: string;
     games: Game[];
     periods: readonly string[];
@@ -252,7 +252,7 @@ export default function LeaderboardPageClient({
             </motion.div>
 
             {/* User's Rank Card */}
-            {userRank.rank && (
+            {userRank && userRank.rank && (
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}

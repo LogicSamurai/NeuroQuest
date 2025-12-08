@@ -30,6 +30,8 @@ export default async function Home() {
 
   const { user, stats, leaderboard, challenges, achievements } = data;
 
+  if (!stats) return null;
+
   return (
     <main className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto">

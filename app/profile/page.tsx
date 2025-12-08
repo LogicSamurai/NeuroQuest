@@ -48,7 +48,7 @@ export default async function ProfilePage() {
                 <ProfilePageClient
                     user={{
                         id: user.id,
-                        name: user.name,
+                        name: user.name || "Anonymous",
                         avatarUrl: user.avatarUrl,
                         bio: user.bio,
                         currentStreak: user.currentStreak,

@@ -1,9 +1,13 @@
 import { getAchievementProgress } from "@/lib/achievements/checker";
 import { getUserId } from "@/app/actions";
 import AchievementsPageClient from "./AchievementsPageClient";
+import { redirect } from "next/navigation";
 
 export default async function AchievementsPage() {
     const userId = await getUserId();
+    if (!userId) {
+        redirect("/");
+    }
     const achievements = await getAchievementProgress(userId);
 
     // Group by category

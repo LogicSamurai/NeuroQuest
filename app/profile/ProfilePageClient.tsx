@@ -297,9 +297,8 @@ export default function ProfilePageClient({
                 isOpen={showEditModal}
                 onClose={() => setShowEditModal(false)}
                 currentName={user.name}
-                currentAvatar={user.avatarUrl}
+                currentAvatarUrl={user.avatarUrl}
                 currentBio={user.bio}
-                avatarOptions={avatarOptions}
             />
         </>
     );
