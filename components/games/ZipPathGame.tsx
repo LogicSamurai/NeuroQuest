@@ -1,17 +1,19 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
     Play, RotateCcw, ChevronLeft, ChevronRight, Trophy, Clock,
-    Star, Lock, Sparkles, Grid, Home, Zap
+    Star, Lock, Sparkles, Grid, Home, Zap, MousePointer2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ALL_LEVELS, ZipLevel, calculateScore } from "@/lib/games/zip-path/levels";
 import PatternReveal from "./PatternReveal";
+import TutorialOverlay from "./TutorialOverlay";
 import confetti from "canvas-confetti";
-import { saveGameSession } from "@/app/actions";
+import { saveGameSession, saveLevelProgress } from "@/app/actions";
 
 interface CellState {
     isPath: boolean;
@@ -31,6 +33,7 @@ interface ZipPathGameProps {
 }
 
 export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
+    const router = useRouter();
     const [gameState, setGameState] = useState<GameState>('menu');
     const [currentLevel, setCurrentLevel] = useState<ZipLevel>(ALL_LEVELS[0]);
     const [grid, setGrid] = useState<CellState[][]>([]);
@@ -41,6 +44,18 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     const [timerRunning, setTimerRunning] = useState(false);
     const [showReveal, setShowReveal] = useState(false);
     const [score, setScore] = useState({ score: 0, stars: 0, timeBonus: 0 });
+
+    // Tutorial state
+    const [showTutorial, setShowTutorial] = useState(false);
+    const [hasSeenTutorial, setHasSeenTutorial] = useState(false);
+
+    useEffect(() => {
+        // Show tutorial if no levels completed (stars is empty) and haven't seen it yet
+        const hasCompletedLevels = initialProgress?.stars && Object.keys(initialProgress.stars).length > 0;
+        if (!hasCompletedLevels && !hasSeenTutorial) {
+            setShowTutorial(true);
+        }
+    }, [initialProgress, hasSeenTutorial]);
 
     // Initialize unlocked levels based on progress
     const [unlockedLevels, setUnlockedLevels] = useState<Set<number>>(() => {
@@ -259,14 +274,21 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
             }
         }
 
-        console.log('Checking completion:', { pathCells, totalCells, reachedNumber });
 
-        // Check if all cells filled
+
+        // STRICT RULE 1: Full Coverage - All non-blocked cells must be filled
         if (pathCells !== totalCells) return;
 
-        // Check if all numbers are in path in correct order
+        // STRICT RULE 2: End Point - The path MUST end at the maximum number
         const maxNumber = Math.max(...Object.keys(currentLevel.numbers).map(Number));
-        if (reachedNumber < maxNumber) return;
+        const lastPathCell = currentPath[currentPath.length - 1];
+        const lastCellState = currentGrid[lastPathCell.row][lastPathCell.col];
+
+        // Ensure the last cell in the path is actually the max number
+        if (!lastCellState.isNumber || lastCellState.number !== maxNumber) return;
+
+        // STRICT RULE 3: Sequential Order (Implicitly handled by drawing logic, but double check)
+        if (reachedNumber !== maxNumber) return;
 
         // Puzzle complete!
         handleComplete();
@@ -313,6 +335,9 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                 scoreResult.stars * 33.33,
                 { duration: timer, level: currentLevel.id }
             );
+
+            // Save level progress (stars and level reached)
+            await saveLevelProgress('zip-path', currentLevel.id, scoreResult.stars);
         } catch (e) {
             console.error('Failed to save game session', e);
         }
@@ -363,6 +388,15 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                     <h2 className="text-2xl font-bold text-white mb-2">Select Level</h2>
                     <p className="text-slate-400">Complete puzzles to unlock more!</p>
                 </motion.div>
+
+                <Button
+                    variant="outline"
+                    className="w-full mb-6 border-slate-700 hover:bg-slate-800 text-slate-300"
+                    onClick={() => router.push('/')}
+                >
+                    <Home className="w-4 h-4 mr-2" />
+                    Back to Home
+                </Button>
 
                 <div className="grid grid-cols-4 gap-3">
                     {ALL_LEVELS.map((level, idx) => {
@@ -446,127 +480,164 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     }
 
     return (
-        <div className="w-full max-w-md mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={goToMenu}
-                    className="text-slate-400 hover:text-white"
-                >
-                    <Home className="w-4 h-4 mr-1" />
-                    Menu
-                </Button>
-
-                <div className="flex items-center gap-2">
-                    <div className={cn(
-                        "px-3 py-1 rounded-full text-sm font-medium",
-                        currentLevel.difficulty === 'easy' ? "bg-green-500/20 text-green-400" :
-                            currentLevel.difficulty === 'medium' ? "bg-yellow-500/20 text-yellow-400" :
-                                currentLevel.difficulty === 'hard' ? "bg-orange-500/20 text-orange-400" :
-                                    "bg-red-500/20 text-red-400"
-                    )}>
-                        {currentLevel.name}
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-1 text-white font-mono">
-                    <Clock className="w-4 h-4 text-slate-400" />
-                    <span>{formatTime(timer)}</span>
-                </div>
-            </div>
-
-            {/* Progress indicator */}
-            <div className="flex items-center justify-center gap-2 mb-4">
-                {Object.keys(currentLevel.numbers).map((num) => (
-                    <div
-                        key={num}
-                        className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all",
-                            parseInt(num) <= currentNumber
-                                ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white scale-110"
-                                : "bg-slate-700 text-slate-400"
-                        )}
-                    >
-                        {num}
-                    </div>
-                ))}
-            </div>
-
-            {/* Game Grid */}
-            <div
-                ref={gridRef}
-                className="relative mx-auto rounded-2xl overflow-hidden bg-slate-800/50 border border-slate-700 p-1"
-                style={{
-                    width: cellSize.current * currentLevel.gridSize + 8,
-                    height: cellSize.current * currentLevel.gridSize + 8,
-                    touchAction: 'none',
+        <>
+            <TutorialOverlay
+                isOpen={showTutorial}
+                title="How to Play Zip"
+                onClose={() => {
+                    setShowTutorial(false);
+                    setHasSeenTutorial(true);
                 }}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerLeave={handlePointerUp}
-            >
-                <div
-                    className="grid gap-0.5"
-                    style={{ gridTemplateColumns: `repeat(${currentLevel.gridSize}, 1fr)` }}
-                >
-                    {grid.map((row, r) =>
-                        row.map((cell, c) => (
-                            <motion.div
-                                key={`${r}-${c}`}
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: (r * currentLevel.gridSize + c) * 0.01 }}
-                                className={cn(
-                                    "rounded-lg flex items-center justify-center transition-all duration-100",
-                                    cell.isBlocked
-                                        ? "bg-slate-900 border border-slate-700"
-                                        : cell.isPath
-                                            ? "bg-gradient-to-br from-cyan-500 to-blue-600"
-                                            : "bg-slate-700/50 hover:bg-slate-700",
-                                    cell.isNumber && "ring-2 ring-white/50"
-                                )}
-                                style={{
-                                    width: cellSize.current - 2,
-                                    height: cellSize.current - 2,
-                                }}
-                            >
-                                {cell.isBlocked ? (
-                                    <div className="w-3 h-3 rounded-full bg-slate-600" />
-                                ) : cell.isNumber ? (
-                                    <span className={cn(
-                                        "text-lg font-bold",
-                                        cell.isPath ? "text-white" : "text-cyan-400"
-                                    )}>
-                                        {cell.number}
-                                    </span>
-                                ) : cell.isPath ? (
-                                    <div className="w-2 h-2 rounded-full bg-white/30" />
-                                ) : null}
-                            </motion.div>
-                        ))
-                    )}
+                onComplete={() => {
+                    setShowTutorial(false);
+                    setHasSeenTutorial(true);
+                }}
+                steps={[
+                    {
+                        title: "Connect the Numbers",
+                        description: "Draw a path starting from 1 to 2, then 3, and so on, until you reach the final number.",
+                        image: <div className="flex gap-2 items-center justify-center p-4 bg-slate-800 rounded-lg">
+                            <div className="w-8 h-8 rounded bg-cyan-500 flex items-center justify-center font-bold text-white">1</div>
+                            <div className="w-8 h-1 bg-cyan-500/50" />
+                            <div className="w-8 h-8 rounded bg-slate-700 flex items-center justify-center font-bold text-cyan-400">2</div>
+                        </div>
+                    },
+                    {
+                        title: "Fill the Grid",
+                        description: "You must fill EVERY empty square in the grid. No empty spaces allowed!",
+                        image: <Grid className="w-16 h-16 text-cyan-400" />
+                    },
+                    {
+                        title: "Don't Cross Paths",
+                        description: "Your path cannot cross itself or overlap. Plan your route carefully!",
+                        image: <div className="relative w-16 h-16 bg-slate-800 rounded flex items-center justify-center">
+                            <div className="absolute inset-0 border-2 border-red-500 rounded rotate-45" />
+                        </div>
+                    }
+                ]}
+            />
+            <div className="w-full max-w-md mx-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={goToMenu}
+                        className="text-slate-400 hover:text-white"
+                    >
+                        <Home className="w-4 h-4 mr-1" />
+                        Menu
+                    </Button>
+
+                    <div className="flex items-center gap-2">
+                        <div className={cn(
+                            "px-3 py-1 rounded-full text-sm font-medium",
+                            currentLevel.difficulty === 'easy' ? "bg-green-500/20 text-green-400" :
+                                currentLevel.difficulty === 'medium' ? "bg-yellow-500/20 text-yellow-400" :
+                                    currentLevel.difficulty === 'hard' ? "bg-orange-500/20 text-orange-400" :
+                                        "bg-red-500/20 text-red-400"
+                        )}>
+                            {currentLevel.name}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-white font-mono">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span>{formatTime(timer)}</span>
+                    </div>
                 </div>
-            </div>
 
-            {/* Controls */}
-            <div className="flex justify-center gap-3 mt-6">
-                <Button
-                    variant="outline"
-                    onClick={resetLevel}
-                    className="bg-slate-800 border-slate-700 hover:bg-slate-700"
+                {/* Progress indicator */}
+                <div className="flex items-center justify-center gap-2 mb-4">
+                    {Object.keys(currentLevel.numbers).map((num) => (
+                        <div
+                            key={num}
+                            className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all",
+                                parseInt(num) <= currentNumber
+                                    ? "bg-gradient-to-br from-cyan-400 to-blue-500 text-white scale-110"
+                                    : "bg-slate-700 text-slate-400"
+                            )}
+                        >
+                            {num}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Game Grid */}
+                <div
+                    ref={gridRef}
+                    className="relative mx-auto rounded-2xl overflow-hidden bg-slate-800/50 border border-slate-700 p-1"
+                    style={{
+                        width: cellSize.current * currentLevel.gridSize + 8,
+                        height: cellSize.current * currentLevel.gridSize + 8,
+                        touchAction: 'none',
+                    }}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
                 >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Reset
-                </Button>
-            </div>
+                    <div
+                        className="grid gap-0.5"
+                        style={{ gridTemplateColumns: `repeat(${currentLevel.gridSize}, 1fr)` }}
+                    >
+                        {grid.map((row, r) =>
+                            row.map((cell, c) => (
+                                <motion.div
+                                    key={`${r}-${c}`}
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: (r * currentLevel.gridSize + c) * 0.01 }}
+                                    className={cn(
+                                        "rounded-lg flex items-center justify-center transition-all duration-100",
+                                        cell.isBlocked
+                                            ? "bg-slate-900 border border-slate-700"
+                                            : cell.isPath
+                                                ? "bg-gradient-to-br from-cyan-500 to-blue-600"
+                                                : "bg-slate-700/50 hover:bg-slate-700",
+                                        cell.isNumber && "ring-2 ring-white/50"
+                                    )}
+                                    style={{
+                                        width: cellSize.current - 2,
+                                        height: cellSize.current - 2,
+                                    }}
+                                >
+                                    {cell.isBlocked ? (
+                                        <div className="w-3 h-3 rounded-full bg-slate-600" />
+                                    ) : cell.isNumber ? (
+                                        <span className={cn(
+                                            "text-lg font-bold",
+                                            cell.isPath ? "text-white" : "text-cyan-400"
+                                        )}>
+                                            {cell.number}
+                                        </span>
+                                    ) : cell.isPath ? (
+                                        <div className="w-2 h-2 rounded-full bg-white/30" />
+                                    ) : null}
+                                </motion.div>
+                            ))
+                        )}
+                    </div>
+                </div>
 
-            {/* Hint */}
-            <p className="text-center text-slate-500 text-sm mt-4">
-                Connect numbers in order (1→2→3...) while filling every cell
-            </p>
-        </div>
+                {/* Controls */}
+                <div className="flex justify-center gap-3 mt-6">
+                    <Button
+                        variant="outline"
+                        onClick={resetLevel}
+                        className="bg-slate-800 border-slate-700 hover:bg-slate-700"
+                    >
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                        Reset
+                    </Button>
+                </div>
+
+                {/* Hint */}
+                <p className="text-center text-slate-500 text-sm mt-4">
+                    Connect numbers in order (1→2→3...) while filling every cell
+                </p>
+            </div>
+        </>
     );
 }

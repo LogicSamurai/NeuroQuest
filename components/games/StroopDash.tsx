@@ -1,11 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Zap, Play, RotateCcw, AlertTriangle } from "lucide-react";
+import { Zap, Play, RotateCcw, AlertTriangle, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saveGameSession } from "@/app/actions";
+import TutorialOverlay from "./TutorialOverlay";
 
 const COLORS = [
     { name: "RED", value: "bg-red-500", text: "text-red-500" },
@@ -23,11 +25,23 @@ interface StroopDashProps {
 }
 
 export default function StroopDash({ initialStats }: StroopDashProps) {
+    const router = useRouter();
     const [isPlaying, setIsPlaying] = useState(false);
     const [score, setScore] = useState(0);
     const [timeLeft, setTimeLeft] = useState(60);
     const [mode, setMode] = useState<Mode>("MATCH_COLOR");
     const [highScore, setHighScore] = useState(initialStats?.highScore || 0);
+
+    // Tutorial state
+    const [showTutorial, setShowTutorial] = useState(false);
+    const [hasSeenTutorial, setHasSeenTutorial] = useState(false);
+
+    useEffect(() => {
+        // Show tutorial if no high score (first time) and haven't seen it yet
+        if ((!initialStats?.highScore || initialStats.highScore === 0) && !hasSeenTutorial) {
+            setShowTutorial(true);
+        }
+    }, [initialStats, hasSeenTutorial]);
 
     // Current Challenge
     const [wordIdx, setWordIdx] = useState(0); // The text displayed (e.g., "RED")
@@ -81,8 +95,13 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
         } else if (timeLeft === 0 && isPlaying) {
             setIsPlaying(false);
             saveGameSession("stroop-dash", score, 1, 100); // Simple difficulty/accuracy for now
+
+            // Update local high score if needed
+            if (score > highScore) {
+                setHighScore(score);
+            }
         }
-    }, [isPlaying, timeLeft, score]);
+    }, [isPlaying, timeLeft, score, highScore]);
 
     const startGame = () => {
         setScore(0);
@@ -136,9 +155,21 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
                         <p className="text-slate-300 mb-8 max-w-md">
                             React fast! Match the <span className="text-green-400 font-bold">COLOR</span> or the <span className="text-red-400 font-bold">WORD</span> based on the rule.
                         </p>
-                        <Button onClick={startGame} size="lg" className="bg-yellow-500 hover:bg-yellow-400 text-black text-xl font-bold px-12 py-6">
-                            <Play className="mr-2 h-6 w-6" /> Start Run
-                        </Button>
+                        <div className="flex gap-4 justify-center">
+                            <Button onClick={startGame} size="lg" className="bg-yellow-500 hover:bg-yellow-400 text-black text-xl font-bold px-12 py-6">
+                                <Play className="mr-2 h-6 w-6" /> Start Run
+                            </Button>
+                            {timeLeft === 0 && (
+                                <Button
+                                    onClick={() => router.push('/')}
+                                    size="lg"
+                                    variant="outline"
+                                    className="border-slate-600 text-slate-300 hover:bg-slate-800 text-xl font-bold px-8 py-6"
+                                >
+                                    <Home className="mr-2 h-6 w-6" /> Home
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 ) : (
                     <>
@@ -209,6 +240,39 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
                     ))}
                 </div>
             )}
+
+            <TutorialOverlay
+                isOpen={showTutorial}
+                title="How to Play StroopDash"
+                onClose={() => {
+                    setShowTutorial(false);
+                    setHasSeenTutorial(true);
+                }}
+                onComplete={() => {
+                    setShowTutorial(false);
+                    setHasSeenTutorial(true);
+                }}
+                steps={[
+                    {
+                        title: "Watch the Rule",
+                        description: "Look at the top of the screen. It will tell you to match either the COLOR or the WORD.",
+                        image: <div className="flex flex-col gap-2 items-center justify-center p-4 bg-slate-800 rounded-lg">
+                            <div className="px-4 py-1 rounded-full border border-green-500 text-green-400 font-bold uppercase text-xs">Match Color</div>
+                            <div className="text-4xl font-black text-blue-500">RED</div>
+                        </div>
+                    },
+                    {
+                        title: "React Fast",
+                        description: "If the rule is MATCH COLOR, press the button for the color of the text (Blue). If it's MATCH WORD, press the button for what the text says (Red).",
+                        image: <Zap className="w-16 h-16 text-yellow-400" />
+                    },
+                    {
+                        title: "Don't Blink",
+                        description: "You have 60 seconds. Correct answers give points, wrong answers subtract points. Good luck!",
+                        image: <div className="text-4xl font-mono font-bold text-white">60s</div>
+                    }
+                ]}
+            />
         </div>
     );
 }
