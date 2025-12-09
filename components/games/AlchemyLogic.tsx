@@ -1,9 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Flame, Droplets, Wind, Mountain, Zap, Snowflake, Sun, Moon, RotateCcw, Play, Sparkles, Atom, Leaf, Skull, Heart, Star, Cloud, Anchor, Feather, Key, Search, Trophy, ArrowRight, Lock } from "lucide-react";
+import { Flame, Droplets, Wind, Mountain, Zap, Snowflake, Sun, Moon, RotateCcw, Play, Sparkles, Atom, Leaf, Skull, Heart, Star, Cloud, Anchor, Feather, Key, Trophy, ArrowRight, Lock, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saveLevelProgress, getLevelProgress } from "@/app/actions";
 import confetti from "canvas-confetti";
@@ -57,6 +58,7 @@ interface AlchemyLogicProps {
 }
 
 export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
+    const router = useRouter();
     const [view, setView] = useState<"grid" | "game">("grid");
     const [levelIdx, setLevelIdx] = useState(0);
     const [maxLevel, setMaxLevel] = useState(initialProgress?.levelReached || 1);
@@ -140,10 +142,11 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
             setCauldron([]);
             setIsLevelComplete(false);
             setNotification(null);
-            // Ensure discovered elements are reset to basics? 
-            // Usually in alchemy games you keep progress, but for "levels" maybe reset?
-            // Let's keep progress for now as it makes higher levels easier/possible.
-            // Actually, if levels are "Create X", you might need previous elements.
+
+            // Reset discovered elements to basics for the new level
+            // This ensures players have to rediscover/recreate complex elements for each level challenge
+            // or at least starts them fresh.
+            setDiscovered(["1", "2", "3", "4"]);
         }
     }, [view, levelIdx]);
 
@@ -269,7 +272,17 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
     if (view === "grid") {
         return (
             <div className="w-full max-w-4xl mx-auto p-8">
-                <h1 className="text-4xl font-bold text-white mb-8 text-center">Select Level</h1>
+                <div className="flex justify-between items-center mb-8">
+                    <h1 className="text-4xl font-bold text-white text-center flex-1">Select Level</h1>
+                    <Button
+                        variant="outline"
+                        onClick={() => router.push('/')}
+                        className="border-slate-700 hover:bg-slate-800 text-slate-300"
+                    >
+                        <Home className="w-4 h-4 mr-2" />
+                        Home
+                    </Button>
+                </div>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                     {levels.map((level, i) => {
                         const isLocked = i + 1 > maxLevel;
@@ -327,7 +340,7 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
     const targetElement = elements.find(e => e.id === currentLevel.targetId);
 
     return (
-        <div className="w-full max-w-6xl mx-auto h-[800px] bg-slate-950 rounded-xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col md:flex-row">
+        <div className="w-full max-w-6xl mx-auto h-[85vh] md:h-[800px] bg-slate-950 rounded-xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col md:flex-row">
 
             {/* LEFT: Elements Sidebar */}
             <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col order-2 md:order-1 h-1/3 md:h-full">

@@ -5,8 +5,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
-    Play, RotateCcw, ChevronLeft, ChevronRight, Trophy, Clock,
-    Star, Lock, Sparkles, Grid, Home, Zap, MousePointer2
+    Play, RotateCcw, Trophy, Clock,
+    Star, Lock, Sparkles, Grid, Home
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ALL_LEVELS, ZipLevel, calculateScore } from "@/lib/games/zip-path/levels";
@@ -273,7 +273,6 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                 }
             }
         }
-
 
 
         // STRICT RULE 1: Full Coverage - All non-blocked cells must be filled

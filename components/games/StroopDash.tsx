@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Zap, Play, RotateCcw, AlertTriangle, Home } from "lucide-react";
+import { Zap, Play, RotateCcw, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saveGameSession } from "@/app/actions";
 import TutorialOverlay from "./TutorialOverlay";
@@ -124,7 +124,7 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
     }, [isPlaying, colorIdx, wordIdx, mode]);
 
     return (
-        <div className="relative w-full max-w-2xl mx-auto h-[600px] bg-slate-900/50 rounded-xl p-8 border border-slate-700 shadow-2xl backdrop-blur-sm flex flex-col items-center justify-between">
+        <div className="relative w-full max-w-2xl mx-auto h-[85vh] md:h-[600px] bg-slate-900/50 rounded-xl p-4 md:p-8 border border-slate-700 shadow-2xl backdrop-blur-sm flex flex-col items-center justify-between">
 
             {/* HUD */}
             <div className="w-full flex justify-between items-start">
@@ -196,7 +196,7 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
                             initial={{ scale: 0.5, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             className={cn(
-                                "text-8xl font-black tracking-tighter filter drop-shadow-2xl transition-colors duration-200",
+                                "text-6xl md:text-8xl font-black tracking-tighter filter drop-shadow-2xl transition-colors duration-200",
                                 COLORS[colorIdx].text
                             )}
                         >
