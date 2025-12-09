@@ -97,8 +97,8 @@ const EASY_LEVELS: ZipLevel[] = [
         numbers: {
             1: { row: 0, col: 1 },
             2: { row: 0, col: 2 },
-            3: { row: 3, col: 1 },
-            4: { row: 3, col: 2 },
+            3: { row: 3, col: 2 },
+            4: { row: 3, col: 3 },
         },
         blocked: [],
         pattern: {
@@ -144,7 +144,7 @@ const EASY_LEVELS: ZipLevel[] = [
         numbers: {
             1: { row: 0, col: 1 },
             2: { row: 2, col: 3 },
-            3: { row: 3, col: 2 },
+            3: { row: 3, col: 3 },
         },
         blocked: [],
         pattern: {
@@ -200,8 +200,8 @@ const MEDIUM_LEVELS: ZipLevel[] = [
             1: { row: 0, col: 2 },
             2: { row: 2, col: 0 },
             3: { row: 2, col: 4 },
-            4: { row: 4, col: 1 },
-            5: { row: 4, col: 3 },
+            4: { row: 4, col: 0 },
+            5: { row: 4, col: 4 },
         },
         blocked: [],
         pattern: {
@@ -224,10 +224,10 @@ const MEDIUM_LEVELS: ZipLevel[] = [
         gridSize: 5,
         numbers: {
             1: { row: 0, col: 2 },
-            2: { row: 2, col: 0 },
-            3: { row: 4, col: 4 },
+            2: { row: 3, col: 1 },
+            3: { row: 2, col: 3 },
         },
-        blocked: [{ row: 3, col: 2 }],
+        blocked: [{ row: 0, col: 0 }],
         pattern: {
             colors: [
                 ['#87CEEB', '#87CEEB', '#A0522D', '#87CEEB', '#87CEEB'],
@@ -306,8 +306,8 @@ const HARD_LEVELS: ZipLevel[] = [
             1: { row: 0, col: 0 },
             2: { row: 0, col: 5 },
             3: { row: 3, col: 3 },
-            4: { row: 5, col: 0 },
-            5: { row: 5, col: 5 },
+            4: { row: 5, col: 1 },
+            5: { row: 5, col: 4 },
         },
         blocked: [{ row: 2, col: 2 }, { row: 2, col: 3 }],
         pattern: {
@@ -334,8 +334,8 @@ const HARD_LEVELS: ZipLevel[] = [
             2: { row: 0, col: 3 },
             3: { row: 3, col: 0 },
             4: { row: 3, col: 5 },
-            5: { row: 5, col: 2 },
-            6: { row: 5, col: 3 },
+            5: { row: 5, col: 1 },
+            6: { row: 5, col: 4 },
         },
         blocked: [],
         pattern: {
@@ -359,11 +359,11 @@ const HARD_LEVELS: ZipLevel[] = [
         gridSize: 6,
         numbers: {
             1: { row: 0, col: 0 },
-            2: { row: 0, col: 5 },
-            3: { row: 2, col: 2 },
-            4: { row: 2, col: 3 },
-            5: { row: 5, col: 2 },
-            6: { row: 5, col: 3 },
+            2: { row: 1, col: 4 },
+            3: { row: 2, col: 3 },
+            4: { row: 2, col: 0 },
+            5: { row: 4, col: 2 },
+            6: { row: 5, col: 4 },
         },
         blocked: [{ row: 1, col: 2 }, { row: 1, col: 3 }],
         pattern: {
@@ -390,8 +390,8 @@ const HARD_LEVELS: ZipLevel[] = [
             2: { row: 0, col: 3 },
             3: { row: 2, col: 1 },
             4: { row: 2, col: 4 },
-            5: { row: 5, col: 2 },
-            6: { row: 5, col: 3 },
+            5: { row: 5, col: 1 },
+            6: { row: 5, col: 4 },
         },
         blocked: [],
         pattern: {
@@ -414,12 +414,12 @@ const HARD_LEVELS: ZipLevel[] = [
         difficulty: 'hard',
         gridSize: 6,
         numbers: {
-            1: { row: 0, col: 2 },
-            2: { row: 0, col: 3 },
-            3: { row: 3, col: 0 },
-            4: { row: 3, col: 5 },
-            5: { row: 5, col: 0 },
-            6: { row: 5, col: 5 },
+            1: { row: 0, col: 0 },
+            2: { row: 2, col: 1 },
+            3: { row: 2, col: 3 },
+            4: { row: 4, col: 0 },
+            5: { row: 5, col: 5 },
+            6: { row: 0, col: 5 },
         },
         blocked: [{ row: 1, col: 0 }, { row: 1, col: 5 }],
         pattern: {
@@ -449,15 +449,15 @@ const EXPERT_LEVELS: ZipLevel[] = [
         difficulty: 'expert',
         gridSize: 7,
         numbers: {
-            1: { row: 0, col: 3 },
-            2: { row: 1, col: 0 },
-            3: { row: 1, col: 6 },
+            1: { row: 0, col: 0 },
+            2: { row: 1, col: 5 },
+            3: { row: 2, col: 2 },
             4: { row: 3, col: 3 },
-            5: { row: 5, col: 0 },
-            6: { row: 5, col: 6 },
-            7: { row: 6, col: 3 },
+            5: { row: 4, col: 4 },
+            6: { row: 5, col: 1 },
+            7: { row: 6, col: 6 },
         },
-        blocked: [{ row: 2, col: 2 }, { row: 2, col: 4 }, { row: 4, col: 2 }, { row: 4, col: 4 }],
+        blocked: [],
         pattern: {
             colors: [
                 ['#0F0F23', '#0F0F23', '#FFFFFF', '#FFD700', '#FFFFFF', '#0F0F23', '#0F0F23'],
@@ -480,12 +480,12 @@ const EXPERT_LEVELS: ZipLevel[] = [
         gridSize: 7,
         numbers: {
             1: { row: 0, col: 0 },
-            2: { row: 0, col: 6 },
+            2: { row: 1, col: 1 },
             3: { row: 3, col: 3 },
-            4: { row: 6, col: 0 },
+            4: { row: 5, col: 5 },
             5: { row: 6, col: 6 },
         },
-        blocked: [{ row: 3, col: 1 }, { row: 3, col: 5 }],
+        blocked: [],
         pattern: {
             colors: [
                 ['#000000', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#000000'],
@@ -507,13 +507,13 @@ const EXPERT_LEVELS: ZipLevel[] = [
         difficulty: 'expert',
         gridSize: 7,
         numbers: {
-            1: { row: 0, col: 3 },
-            2: { row: 2, col: 0 },
-            3: { row: 2, col: 6 },
-            4: { row: 4, col: 1 },
-            5: { row: 4, col: 5 },
-            6: { row: 6, col: 2 },
-            7: { row: 6, col: 4 },
+            1: { row: 0, col: 0 },
+            2: { row: 1, col: 5 },
+            3: { row: 2, col: 2 },
+            4: { row: 3, col: 3 },
+            5: { row: 4, col: 4 },
+            6: { row: 5, col: 1 },
+            7: { row: 6, col: 6 },
         },
         blocked: [],
         pattern: {
@@ -537,15 +537,15 @@ const EXPERT_LEVELS: ZipLevel[] = [
         difficulty: 'expert',
         gridSize: 7,
         numbers: {
-            1: { row: 0, col: 1 },
-            2: { row: 0, col: 5 },
-            3: { row: 2, col: 0 },
-            4: { row: 2, col: 6 },
-            5: { row: 4, col: 1 },
-            6: { row: 4, col: 5 },
-            7: { row: 6, col: 3 },
+            1: { row: 0, col: 0 },
+            2: { row: 5, col: 1 },
+            3: { row: 2, col: 2 },
+            4: { row: 3, col: 3 },
+            5: { row: 4, col: 4 },
+            6: { row: 1, col: 5 },
+            7: { row: 6, col: 6 },
         },
-        blocked: [{ row: 3, col: 3 }],
+        blocked: [],
         pattern: {
             colors: [
                 ['#87CEEB', '#C0C0C0', '#C0C0C0', '#FF0000', '#C0C0C0', '#C0C0C0', '#87CEEB'],
@@ -568,14 +568,14 @@ const EXPERT_LEVELS: ZipLevel[] = [
         gridSize: 7,
         numbers: {
             1: { row: 0, col: 0 },
-            2: { row: 0, col: 3 },
-            3: { row: 0, col: 6 },
-            4: { row: 3, col: 1 },
-            5: { row: 3, col: 5 },
-            6: { row: 6, col: 0 },
+            2: { row: 1, col: 5 },
+            3: { row: 2, col: 2 },
+            4: { row: 3, col: 3 },
+            5: { row: 4, col: 4 },
+            6: { row: 5, col: 1 },
             7: { row: 6, col: 6 },
         },
-        blocked: [{ row: 4, col: 3 }],
+        blocked: [],
         pattern: {
             colors: [
                 ['#FFD700', '#8B0000', '#FFD700', '#00CED1', '#FFD700', '#8B0000', '#FFD700'],

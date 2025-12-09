@@ -101,11 +101,16 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
         setCurrentNumber(1);
     }, [currentLevel]);
 
-    // Timer effect
+    // Timer effect with persistence
     useEffect(() => {
         if (timerRunning) {
             timerRef.current = setInterval(() => {
-                setTimer(t => t + 1);
+                setTimer(t => {
+                    const newTime = t + 1;
+                    // Save to localStorage
+                    localStorage.setItem(`zip-timer-${currentLevel.id}`, newTime.toString());
+                    return newTime;
+                });
             }, 1000);
         } else if (timerRef.current) {
             clearInterval(timerRef.current);
@@ -113,15 +118,29 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [timerRunning]);
+    }, [timerRunning, currentLevel.id]);
 
     // Initialize on level change
     useEffect(() => {
         initializeGrid();
-        setTimer(0);
-        setTimerRunning(false);
+
+        // Load saved timer or start fresh
+        const savedTime = localStorage.getItem(`zip-timer-${currentLevel.id}`);
+        if (savedTime) {
+            setTimer(parseInt(savedTime));
+        } else {
+            setTimer(0);
+        }
+
         setShowReveal(false);
-    }, [currentLevel, initializeGrid]);
+
+        // Auto-start timer if we are in playing state
+        if (gameState === 'playing') {
+            setTimerRunning(true);
+        } else {
+            setTimerRunning(false);
+        }
+    }, [currentLevel, initializeGrid, gameState]);
 
     // Calculate cell size based on container
     useEffect(() => {
@@ -295,6 +314,9 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
 
     const handleComplete = async () => {
         setTimerRunning(false);
+        // Clear saved timer
+        localStorage.removeItem(`zip-timer-${currentLevel.id}`);
+
         setGameState('completed');
 
         const scoreResult = calculateScore(currentLevel, timer);
@@ -350,7 +372,8 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     const resetLevel = () => {
         initializeGrid();
         setTimer(0);
-        setTimerRunning(false);
+        localStorage.removeItem(`zip-timer-${currentLevel.id}`);
+        setTimerRunning(true); // Auto-restart on reset
         setShowReveal(false);
         setGameState('playing');
     };
@@ -364,6 +387,7 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     };
 
     const goToMenu = () => {
+        setTimerRunning(false); // Pause timer
         setGameState('menu');
         setShowReveal(false);
     };
