@@ -10,10 +10,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ALL_LEVELS, ZipLevel, calculateScore } from "@/lib/games/zip-path/levels";
+import { solveZipLevel } from "@/lib/games/zip-path/solver";
 import PatternReveal from "./PatternReveal";
 import TutorialOverlay from "./TutorialOverlay";
 import confetti from "canvas-confetti";
-import { saveGameSession, saveLevelProgress } from "@/app/actions";
+import { saveGameSession, saveLevelProgress, saveDailyResult } from "@/app/actions";
 
 interface CellState {
     isPath: boolean;
@@ -44,6 +45,11 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     const [timerRunning, setTimerRunning] = useState(false);
     const [showReveal, setShowReveal] = useState(false);
     const [score, setScore] = useState({ score: 0, stars: 0, timeBonus: 0 });
+    const [isLoadingDaily, setIsLoadingDaily] = useState(false);
+    const [dailyLeaderboard, setDailyLeaderboard] = useState<any[]>([]);
+    const [showDailyLeaderboard, setShowDailyLeaderboard] = useState(false);
+    const [hintsUsed, setHintsUsed] = useState(0);
+    const [hintCell, setHintCell] = useState<{ row: number, col: number } | null>(null);
 
     // Tutorial state
     const [showTutorial, setShowTutorial] = useState(false);
@@ -99,6 +105,8 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
         setGrid(newGrid);
         setPath([]);
         setCurrentNumber(1);
+        setHintsUsed(0);
+        setHintCell(null);
     }, [currentLevel]);
 
     // Timer effect with persistence
@@ -319,7 +327,18 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
 
         setGameState('completed');
 
-        const scoreResult = calculateScore(currentLevel, timer);
+        setGameState('completed');
+
+        // Calculate score with hint penalty (e.g., -10% per hint)
+        const rawScore = calculateScore(currentLevel, timer);
+        const penalty = Math.min(0.5, hintsUsed * 0.1); // Max 50% penalty
+        const finalScore = Math.floor(rawScore.score * (1 - penalty));
+
+        const scoreResult = {
+            ...rawScore,
+            score: finalScore
+        };
+
         setScore(scoreResult);
 
         // Update level stars
@@ -359,6 +378,16 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
 
             // Save level progress (stars and level reached)
             await saveLevelProgress('zip-path', currentLevel.id, scoreResult.stars);
+
+            // If it's a daily challenge, save to daily results
+            if (currentLevel.id.toString().startsWith('daily-')) {
+                await saveDailyResult(
+                    'zip-path',
+                    currentLevel.id.toString().replace('daily-', ''), // Date is part of ID
+                    scoreResult.score,
+                    timer
+                );
+            }
         } catch (e) {
             console.error('Failed to save game session', e);
         }
@@ -399,8 +428,98 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const handleHint = () => {
+        if (gameState !== 'playing') return;
+
+        // 1. Try to find solution from current path
+        const solution = solveZipLevel(currentLevel, path);
+
+        if (solution) {
+            // Valid path so far! Show next step
+            const nextStep = solution[path.length];
+            if (nextStep) {
+                setHintCell(nextStep);
+                setHintsUsed(h => h + 1);
+
+                // Clear hint after 2 seconds
+                setTimeout(() => setHintCell(null), 2000);
+            }
+        } else {
+            // Current path is invalid (dead end)
+            // Suggest backtracking
+            // We could find the last valid prefix, but for now just alert
+            alert("You're off track! Try backtracking.");
+        }
+    };
+
+    const startDailyChallenge = async () => {
+        setIsLoadingDaily(true);
+        try {
+            const res = await fetch('/api/daily?gameId=zip-path');
+            if (!res.ok) throw new Error('Failed to fetch daily');
+            const level = await res.json();
+            // Ensure level has required properties
+            if (!level.numbers || !level.gridSize) throw new Error('Invalid level data');
+
+            setCurrentLevel(level);
+            setGameState('playing');
+        } catch (e) {
+            console.error("Failed to load daily challenge:", e);
+            // You might want to show a toast here
+        } finally {
+            setIsLoadingDaily(false);
+        }
+    };
+
+    const fetchDailyLeaderboard = async () => {
+        try {
+            const res = await fetch('/api/daily/leaderboard?gameId=zip-path');
+            if (res.ok) {
+                const data = await res.json();
+                setDailyLeaderboard(data.leaderboard || []);
+                setShowDailyLeaderboard(true);
+            }
+        } catch (e) {
+            console.error("Failed to fetch leaderboard", e);
+        }
+    };
+
     // Render level selection menu
     if (gameState === 'menu') {
+        if (showDailyLeaderboard) {
+            return (
+                <div className="w-full max-w-md mx-auto">
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-bold text-white">Daily Leaderboard</h2>
+                        <Button variant="ghost" size="sm" onClick={() => setShowDailyLeaderboard(false)}>Close</Button>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-xl p-4 space-y-3">
+                        {dailyLeaderboard.length === 0 ? (
+                            <p className="text-slate-400 text-center">No scores yet today. Be the first!</p>
+                        ) : (
+                            dailyLeaderboard.map((entry, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-2 bg-slate-700/30 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <div className={cn(
+                                            "w-6 h-6 flex items-center justify-center font-bold rounded-full text-xs",
+                                            idx === 0 ? "bg-yellow-500 text-black" :
+                                                idx === 1 ? "bg-slate-300 text-black" :
+                                                    idx === 2 ? "bg-amber-700 text-white" : "bg-slate-600 text-slate-300"
+                                        )}>{idx + 1}</div>
+                                        <div className="flex flex-col">
+                                            <span className="text-white font-medium text-sm">{entry.name || 'Anonymous'}</span>
+                                            <span className="text-xs text-slate-400">{formatTime(entry.timeTaken)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-cyan-400 font-bold">{entry.score} pts</div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="w-full max-w-md mx-auto">
                 <motion.div
@@ -412,14 +531,37 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                     <p className="text-slate-400">Complete puzzles to unlock more!</p>
                 </motion.div>
 
-                <Button
-                    variant="outline"
-                    className="w-full mb-6 border-slate-700 hover:bg-slate-800 text-slate-300"
-                    onClick={() => router.push('/')}
-                >
-                    <Home className="w-4 h-4 mr-2" />
-                    Back to Home
-                </Button>
+                <div className="space-y-3 mb-6">
+                    <Button
+                        variant="outline"
+                        className="w-full border-slate-700 hover:bg-slate-800 text-slate-300"
+                        onClick={() => router.push('/')}
+                    >
+                        <Home className="w-4 h-4 mr-2" />
+                        Back to Home
+                    </Button>
+
+                    <Button
+                        className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0"
+                        onClick={startDailyChallenge}
+                        disabled={isLoadingDaily}
+                    >
+                        {isLoadingDaily ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                        ) : (
+                            <Sparkles className="w-4 h-4 mr-2" />
+                        )}
+                        Daily Challenge
+                    </Button>
+
+                    <Button
+                        variant="ghost"
+                        className="w-full text-slate-400 hover:text-white text-xs"
+                        onClick={fetchDailyLeaderboard}
+                    >
+                        View Today's Leaderboard
+                    </Button>
+                </div>
 
                 <div className="grid grid-cols-4 gap-3">
                     {ALL_LEVELS.map((level, idx) => {
@@ -562,6 +704,15 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                         )}>
                             {currentLevel.name}
                         </div>
+
+                        <Button
+                            variant="outline"
+                            onClick={handleHint}
+                            className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-yellow-400"
+                        >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Hint
+                        </Button>
                     </div>
 
                     <div className="flex items-center gap-1 text-white font-mono">
@@ -619,7 +770,8 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                                             : cell.isPath
                                                 ? "bg-gradient-to-br from-cyan-500 to-blue-600"
                                                 : "bg-slate-700/50 hover:bg-slate-700",
-                                        cell.isNumber && "ring-2 ring-white/50"
+                                        cell.isNumber && "ring-2 ring-white/50",
+                                        hintCell?.row === r && hintCell?.col === c && "ring-4 ring-yellow-400 animate-pulse bg-yellow-500/20"
                                     )}
                                     style={{
                                         width: cellSize.current - 2,

@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { gameSessions, users, userProgress, globalStats } from "@/db/schema";
+import { gameSessions, users, userProgress, globalStats, dailyPuzzles, dailyPuzzleResults } from "@/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { updateLeaderboardEntry, incrementGlobalGameCount, getTopPlayersPreview, getUserRank } from "@/db/queries/leaderboard";
@@ -345,5 +345,67 @@ export async function updateProfileAction(data: {
 
     revalidatePath('/profile');
     revalidatePath('/');
+    return { success: true };
+}
+
+export async function saveDailyResult(
+    gameId: string,
+    date: string,
+    score: number,
+    timeTaken: number
+) {
+    const userId = await ensureUser();
+
+    // Find the puzzle ID
+    const puzzle = await db.query.dailyPuzzles.findFirst({
+        where: and(
+            eq(dailyPuzzles.date, date),
+            eq(dailyPuzzles.gameId, gameId)
+        )
+    });
+
+    if (!puzzle) {
+        throw new Error("Daily puzzle not found");
+    }
+
+    // Check for existing result
+    const existingResult = await db.select()
+        .from(dailyPuzzleResults)
+        .where(and(
+            eq(dailyPuzzleResults.userId, userId),
+            eq(dailyPuzzleResults.puzzleId, puzzle.id)
+        ))
+        .limit(1)
+        .then(res => res[0]);
+
+    if (existingResult) {
+        // Only update if score is better, or score is same but time is better
+        const isBetterScore = score > existingResult.score;
+        const isSameScoreBetterTime = score === existingResult.score && timeTaken < existingResult.timeTaken;
+
+        if (isBetterScore || isSameScoreBetterTime) {
+            await db.update(dailyPuzzleResults)
+                .set({
+                    score,
+                    timeTaken,
+                    completedAt: new Date(),
+                })
+                .where(eq(dailyPuzzleResults.id, existingResult.id));
+        }
+        // If not better, ignore (keep best)
+    } else {
+        // Save new result
+        await db.insert(dailyPuzzleResults).values({
+            userId,
+            puzzleId: puzzle.id,
+            score,
+            timeTaken,
+        });
+
+        // Award XP for daily completion (only for first time)
+        await awardXp(userId, XP_AWARDS.challengeComplete, 'challenge', { gameId, type: 'daily_puzzle' });
+    }
+
+    revalidatePath(`/games/${gameId}`);
     return { success: true };
 }

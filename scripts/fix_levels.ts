@@ -2,7 +2,7 @@
 import { ALL_LEVELS, ZipLevel } from '../lib/games/zip-path/levels';
 
 // Simple grid representation
-type Grid = number[][]; // 0 = empty, -1 = blocked
+export type Grid = number[][]; // 0 = empty, -1 = blocked
 
 const UNSOLVABLE_IDS = [16, 17, 18, 19, 20];
 
@@ -75,7 +75,7 @@ function printSolution(level: ZipLevel, path: { row: number, col: number }[], nu
     console.log(JSON.stringify(newNumbers, null, 2));
 }
 
-function findHamiltonianPath(
+export function findHamiltonianPath(
     grid: Grid,
     r: number,
     c: number,
@@ -131,4 +131,6 @@ async function fixAll() {
     }
 }
 
-fixAll();
+if (require.main === module) {
+    fixAll();
+}

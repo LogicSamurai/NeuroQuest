@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Flame, Droplets, Wind, Mountain, Zap, Snowflake, Sun, Moon, RotateCcw, Play, Sparkles, Atom, Leaf, Skull, Heart, Star, Cloud, Anchor, Feather, Key, Trophy, ArrowRight, Lock, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { saveLevelProgress, getLevelProgress } from "@/app/actions";
+import { saveLevelProgress, getLevelProgress, saveDailyResult } from "@/app/actions";
 import confetti from "canvas-confetti";
 
 // Extended Icon Set (Fallback)
@@ -74,6 +74,15 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
     const [isMixing, setIsMixing] = useState(false);
     const [notification, setNotification] = useState<{ name: string, icon: any } | null>(null);
     const [isLevelComplete, setIsLevelComplete] = useState(false);
+    const [timer, setTimer] = useState(0);
+    const [timerRunning, setTimerRunning] = useState(false);
+    const [isDaily, setIsDaily] = useState(false);
+    const [dailyDate, setDailyDate] = useState<string>("");
+    const [dailyLeaderboard, setDailyLeaderboard] = useState<any[]>([]);
+    const [showDailyLeaderboard, setShowDailyLeaderboard] = useState(false);
+    const [isLoadingDaily, setIsLoadingDaily] = useState(false);
+    const [hintsUsed, setHintsUsed] = useState(0);
+    const [hintElements, setHintElements] = useState<string[]>([]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const currentLevel = levels[levelIdx];
@@ -142,13 +151,85 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
             setCauldron([]);
             setIsLevelComplete(false);
             setNotification(null);
+            setTimer(0);
+            setTimerRunning(true);
+            setHintsUsed(0);
+            setHintElements([]);
 
             // Reset discovered elements to basics for the new level
             // This ensures players have to rediscover/recreate complex elements for each level challenge
             // or at least starts them fresh.
             setDiscovered(["1", "2", "3", "4"]);
+        } else {
+            setTimerRunning(false);
+            setIsDaily(false);
         }
     }, [view, levelIdx]);
+
+    // Timer Effect
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (timerRunning) {
+            interval = setInterval(() => {
+                setTimer(t => t + 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [timerRunning]);
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const startDailyChallenge = async () => {
+        setIsLoadingDaily(true);
+        try {
+            const res = await fetch('/api/daily?gameId=alchemy-logic');
+            if (!res.ok) throw new Error('Failed to fetch daily');
+            const level = await res.json();
+
+            // Transform daily level data to match LevelData interface
+            const dailyLevel: LevelData = {
+                id: 999, // Special ID for daily
+                targetName: level.targetName,
+                targetId: level.targetId,
+                description: level.description
+            };
+
+            // Extract date from level ID (daily-YYYY-MM-DD)
+            if (level.id && typeof level.id === 'string' && level.id.startsWith('daily-')) {
+                setDailyDate(level.id.replace('daily-', ''));
+            } else {
+                setDailyDate(new Date().toISOString().split('T')[0]);
+            }
+
+            // We need to inject this level into the levels array temporarily or handle it separately
+            // For simplicity, we'll append it and select it
+            setLevels(prev => [...prev, dailyLevel]);
+            setLevelIdx(levels.length); // It will be at the end
+            setIsDaily(true);
+            setView("game");
+        } catch (e) {
+            console.error("Failed to load daily challenge:", e);
+        } finally {
+            setIsLoadingDaily(false);
+        }
+    };
+
+    const fetchDailyLeaderboard = async () => {
+        try {
+            const res = await fetch('/api/daily/leaderboard?gameId=alchemy-logic');
+            if (res.ok) {
+                const data = await res.json();
+                setDailyLeaderboard(data.leaderboard || []);
+                setShowDailyLeaderboard(true);
+            }
+        } catch (e) {
+            console.error("Failed to fetch leaderboard", e);
+        }
+    };
 
     // Scroll logs
     useEffect(() => {
@@ -231,15 +312,68 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
         setCauldron([]);
     };
 
-    const handleWin = () => {
+    const handleWin = async () => {
         setIsLevelComplete(true);
+        setTimerRunning(false);
         confetti({
             particleCount: 150,
             spread: 70,
             origin: { y: 0.6 },
             colors: ['#a855f7', '#3b82f6', '#ef4444', '#eab308']
         });
-        saveLevelProgress("alchemy-logic", levelIdx + 1, 3);
+
+        if (isDaily) {
+            // Use the date from the level, or fallback to today
+            const date = dailyDate || new Date().toISOString().split('T')[0];
+            // Reduce score by 10 per hint (min 10)
+            const score = Math.max(10, 100 - (hintsUsed * 10));
+            await saveDailyResult('alchemy-logic', date, score, timer);
+        } else {
+            // Reduce stars: 0 hints = 3 stars, 1-2 hints = 2 stars, 3+ = 1 star
+            const stars = hintsUsed === 0 ? 3 : hintsUsed <= 2 ? 2 : 1;
+            saveLevelProgress("alchemy-logic", levelIdx + 1, stars);
+        }
+    };
+
+    const handleHint = () => {
+        if (!currentLevel || isLevelComplete) return;
+
+        setHintsUsed(prev => prev + 1);
+        setHintElements([]); // Clear previous hints
+
+        const targetId = currentLevel.targetId;
+
+        // Strategy 1: Find a recipe that directly produces the target using discovered elements
+        const directRecipe = recipes.find(r =>
+            r.output === targetId &&
+            discovered.includes(r.input1) &&
+            discovered.includes(r.input2)
+        );
+
+        if (directRecipe) {
+            setHintElements([directRecipe.input1, directRecipe.input2]);
+            return;
+        }
+
+        // Strategy 2: Find a recipe that produces an undiscovered element using discovered elements
+        const intermediateRecipe = recipes.find(r =>
+            !discovered.includes(r.output) &&
+            discovered.includes(r.input1) &&
+            discovered.includes(r.input2)
+        );
+
+        if (intermediateRecipe) {
+            setHintElements([intermediateRecipe.input1, intermediateRecipe.input2]);
+            return;
+        }
+
+        // Strategy 3: If no useful recipe found, just highlight two random discovered elements
+        if (discovered.length >= 2) {
+            const shuffled = [...discovered].sort(() => 0.5 - Math.random());
+            setHintElements([shuffled[0], shuffled[1]]);
+        } else if (discovered.length === 1) {
+            setHintElements([discovered[0]]);
+        }
     };
 
     const nextLevel = () => {
@@ -331,6 +465,67 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                         );
                     })}
                 </div>
+
+                <div className="mt-8 flex justify-center gap-4">
+                    <Button
+                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0"
+                        onClick={startDailyChallenge}
+                        disabled={isLoadingDaily}
+                    >
+                        {isLoadingDaily ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                        ) : (
+                            <Sparkles className="w-4 h-4 mr-2" />
+                        )}
+                        Daily Challenge
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        className="text-slate-400 hover:text-white"
+                        onClick={fetchDailyLeaderboard}
+                    >
+                        View Today's Leaderboard
+                    </Button>
+                </div>
+
+                {showDailyLeaderboard && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md relative">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="absolute top-2 right-2"
+                                onClick={() => setShowDailyLeaderboard(false)}
+                            >
+                                X
+                            </Button>
+                            <h2 className="text-2xl font-bold text-white mb-4">Daily Leaderboard</h2>
+                            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                                {dailyLeaderboard.length === 0 ? (
+                                    <p className="text-slate-400 text-center">No scores yet today. Be the first!</p>
+                                ) : (
+                                    dailyLeaderboard.map((entry, idx) => (
+                                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
+                                            <div className="flex items-center gap-3">
+                                                <div className={cn(
+                                                    "w-8 h-8 flex items-center justify-center font-bold rounded-full text-sm",
+                                                    idx === 0 ? "bg-yellow-500 text-black" :
+                                                        idx === 1 ? "bg-slate-300 text-black" :
+                                                            idx === 2 ? "bg-amber-700 text-white" : "bg-slate-700 text-slate-300"
+                                                )}>{idx + 1}</div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-white font-medium">{entry.name || 'Anonymous'}</span>
+                                                    <span className="text-xs text-slate-400">{formatTime(entry.timeTaken)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-cyan-400 font-bold">Completed</div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -360,7 +555,8 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                                 disabled={isMixing || isLevelComplete}
                                 className={cn(
                                     "aspect-square rounded-lg flex flex-col items-center justify-center border border-slate-800 bg-slate-950/50 p-1 hover:bg-slate-800 transition-colors",
-                                    BG_COLORS[el?.colorIdx || 0]
+                                    BG_COLORS[el?.colorIdx || 0],
+                                    hintElements.includes(id) && "ring-2 ring-yellow-400 animate-pulse"
                                 )}
                             >
                                 {renderIcon(el, "w-6 h-6")}
@@ -382,12 +578,20 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                         </div>
                         <div>
                             <h2 className="text-white font-bold">Target: {currentLevel.targetName}</h2>
-                            <p className="text-xs text-slate-500">Level {currentLevel.id}</p>
+                            <p className="text-xs text-slate-500">{isDaily ? 'Daily Challenge' : `Level ${currentLevel.id}`}</p>
                         </div>
                     </div>
-                    <Button onClick={() => setView("grid")} variant="ghost" size="sm">
-                        Menu
-                    </Button>
+                    <div className="flex items-center gap-4">
+                        <div className="font-mono text-xl text-white bg-slate-900 px-3 py-1 rounded border border-slate-800">
+                            {formatTime(timer)}
+                        </div>
+                        <Button onClick={() => setView("grid")} variant="ghost" size="sm">
+                            Menu
+                        </Button>
+                        <Button onClick={handleHint} variant="ghost" size="sm" className="text-yellow-400 hover:text-yellow-300">
+                            <Sparkles className="w-4 h-4 mr-1" /> Hint
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Mixing Zone */}
@@ -467,7 +671,8 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                         >
                             <Trophy className="w-24 h-24 text-yellow-400 mb-6 animate-bounce" />
                             <h2 className="text-4xl font-bold text-white mb-2">Congratulations!</h2>
-                            <p className="text-slate-300 mb-8 text-lg">You discovered {currentLevel.targetName}!</p>
+                            <p className="text-slate-300 mb-2 text-lg">You discovered {currentLevel.targetName}!</p>
+                            <p className="text-cyan-400 mb-8 text-xl font-mono">Time: {formatTime(timer)}</p>
                             <Button onClick={nextLevel} size="lg" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold px-8 py-6 text-xl rounded-full shadow-lg hover:scale-105 transition-transform">
                                 Next Level <ArrowRight className="ml-2 w-6 h-6" />
                             </Button>

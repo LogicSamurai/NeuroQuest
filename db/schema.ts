@@ -206,6 +206,43 @@ export const xpTransactions = pgTable('xp_transactions', {
     userIdx: index('idx_xp_user').on(table.userId),
 }));
 
+export const gameLevels = pgTable('game_levels', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    gameId: text('game_id').notNull(), // 'zip-path', 'alchemy', 'stroop'
+    name: text('name').notNull(),
+    difficulty: text('difficulty').notNull(), // 'easy', 'medium', 'hard', 'expert'
+    data: text('data').notNull(), // JSON string of level data (grid, numbers, etc.)
+    isCampaign: boolean('is_campaign').notNull().default(false),
+    orderIndex: integer('order_index'), // For campaign ordering
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+    gameIdx: index('idx_levels_game').on(table.gameId),
+    campaignIdx: index('idx_levels_campaign').on(table.gameId, table.isCampaign, table.orderIndex),
+}));
+
+export const dailyPuzzles = pgTable('daily_puzzles', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    date: text('date').notNull(), // YYYY-MM-DD
+    gameId: text('game_id').notNull(),
+    levelId: text('level_id').notNull().references(() => gameLevels.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+    dateGameIdx: index('idx_daily_date_game').on(table.date, table.gameId),
+}));
+
+export const dailyPuzzleResults = pgTable('daily_puzzle_results', {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    puzzleId: text('puzzle_id').notNull().references(() => dailyPuzzles.id, { onDelete: 'cascade' }),
+    score: integer('score').notNull(),
+    timeTaken: integer('time_taken').notNull(), // in seconds
+    completedAt: timestamp('completed_at').defaultNow().notNull(),
+}, (table) => ({
+    puzzleScoreIdx: index('idx_daily_results_score').on(table.puzzleId, table.score),
+    puzzleTimeIdx: index('idx_daily_results_time').on(table.puzzleId, table.timeTaken),
+    userPuzzleIdx: index('idx_daily_results_user').on(table.userId, table.puzzleId),
+}));
+
 // ============================================
 // TYPE EXPORTS
 // ============================================
@@ -217,3 +254,6 @@ export type UserAchievement = typeof userAchievements.$inferSelect;
 export type DailyChallenge = typeof dailyChallenges.$inferSelect;
 export type Friendship = typeof friendships.$inferSelect;
 export type ActivityFeedItem = typeof activityFeed.$inferSelect;
+export type GameLevel = typeof gameLevels.$inferSelect;
+export type DailyPuzzle = typeof dailyPuzzles.$inferSelect;
+export type DailyPuzzleResult = typeof dailyPuzzleResults.$inferSelect;
