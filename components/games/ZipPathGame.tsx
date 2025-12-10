@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,9 @@ interface ZipPathGameProps {
 
 export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const autoDaily = searchParams.get('daily') === 'true';
+
     const [gameState, setGameState] = useState<GameState>('menu');
     const [currentLevel, setCurrentLevel] = useState<ZipLevel>(ALL_LEVELS[0]);
     const [grid, setGrid] = useState<CellState[][]>([]);
@@ -58,10 +61,17 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     useEffect(() => {
         // Show tutorial if no levels completed (stars is empty) and haven't seen it yet
         const hasCompletedLevels = initialProgress?.stars && Object.keys(initialProgress.stars).length > 0;
-        if (!hasCompletedLevels && !hasSeenTutorial) {
+        if (!hasCompletedLevels && !hasSeenTutorial && !autoDaily) {
             setShowTutorial(true);
         }
-    }, [initialProgress, hasSeenTutorial]);
+    }, [initialProgress, hasSeenTutorial, autoDaily]);
+
+    // Auto-start daily if requested
+    useEffect(() => {
+        if (autoDaily && gameState === 'menu') {
+            startDailyChallenge();
+        }
+    }, [autoDaily]);
 
     // Initialize unlocked levels based on progress
     const [unlockedLevels, setUnlockedLevels] = useState<Set<number>>(() => {
@@ -643,6 +653,7 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                 onContinue={() => {
                     const isDaily = currentLevel.id.toString().startsWith('daily-');
                     if (isDaily) {
+                        fetchDailyLeaderboard();
                         setShowDailyLeaderboard(true);
                         goToMenu();
                     } else if (ALL_LEVELS.find(l => l.id === (currentLevel.id as number) + 1)) {

@@ -235,17 +235,20 @@ export default function PatternReveal({
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-slate-400 flex items-center gap-1">
                                     <Clock className="w-4 h-4" />
-                                    Time
+                                    Time Taken
                                 </span>
-                                <span className="text-white font-mono">{formatTime(time)}</span>
+                                <span className="text-white font-mono text-lg font-bold">{formatTime(time)}</span>
                             </div>
                             {score.timeBonus > 0 && (
-                                <div className="flex items-center justify-between text-green-400">
-                                    <span className="flex items-center gap-1">
-                                        <Zap className="w-4 h-4" />
-                                        Time Bonus
-                                    </span>
-                                    <span>+{score.timeBonus}</span>
+                                <div className="flex flex-col gap-1 mb-2">
+                                    <div className="flex items-center justify-between text-green-400">
+                                        <span className="flex items-center gap-1">
+                                            <Zap className="w-4 h-4" />
+                                            Time Bonus
+                                        </span>
+                                        <span>+{score.timeBonus}</span>
+                                    </div>
+                                    <span className="text-[10px] text-slate-500 text-right">(Included in Score)</span>
                                 </div>
                             )}
                         </motion.div>

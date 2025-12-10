@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,9 @@ interface AlchemyLogicProps {
 
 export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const autoDaily = searchParams.get('daily') === 'true';
+
     const [view, setView] = useState<"grid" | "game">("grid");
     const [levelIdx, setLevelIdx] = useState(0);
     const [maxLevel, setMaxLevel] = useState(initialProgress?.levelReached || 1);
@@ -144,6 +147,16 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
         };
         loadData();
     }, []);
+
+    // Auto-start daily if requested
+    useEffect(() => {
+        if (autoDaily && view === 'grid' && !isLoadingDaily) {
+            // Small delay to ensure functions are ready
+            setTimeout(() => {
+                startDailyChallenge();
+            }, 500);
+        }
+    }, [autoDaily]);
 
     // Reset level state when entering game view or changing level
     useEffect(() => {
@@ -681,7 +694,7 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                                     <Button onClick={() => setView("grid")} size="lg" variant="outline" className="border-slate-600 text-white hover:bg-slate-800">
                                         Back to Menu
                                     </Button>
-                                    <Button onClick={() => { setShowDailyLeaderboard(true); setView("grid"); }} size="lg" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold">
+                                    <Button onClick={() => { fetchDailyLeaderboard(); setShowDailyLeaderboard(true); setView("grid"); }} size="lg" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold">
                                         View Leaderboard
                                     </Button>
                                 </div>

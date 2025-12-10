@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Target, Clock, CheckCircle2, Sparkles, Flame, Zap, Grid3X3 } from "lucide-react";
+import { Target, Clock, CheckCircle2, Sparkles, Flame, Zap, Grid3X3, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Challenge {
@@ -31,6 +31,12 @@ const gameColors: Record<string, string> = {
     'zip-path': 'text-cyan-400 bg-cyan-500/20',
     'alchemy-logic': 'text-purple-400 bg-purple-500/20',
     'stroop-dash': 'text-rose-400 bg-rose-500/20',
+};
+
+const gameRoutes: Record<string, string> = {
+    'zip-path': 'connect-the-dots',
+    'alchemy-logic': 'alchemy-logic',
+    'stroop-dash': 'stroop-dash',
 };
 
 export default function DailyChallengesCard({
@@ -173,17 +179,26 @@ export default function DailyChallengesCard({
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Game badge */}
                                 {challenge.gameId && (
-                                    <div className={cn(
-                                        "inline-flex items-center gap-1 mt-2 px-2 py-0.5 rounded text-xs",
-                                        gameColors[challenge.gameId] || "text-slate-400 bg-slate-700/50"
-                                    )}>
-                                        {gameIcons[challenge.gameId]}
-                                        <span className="capitalize">
-                                            {challenge.gameId.replace(/-/g, ' ')}
-                                        </span>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <div className={cn(
+                                            "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs",
+                                            gameColors[challenge.gameId] || "text-slate-400 bg-slate-700/50"
+                                        )}>
+                                            {gameIcons[challenge.gameId]}
+                                            <span className="capitalize">
+                                                {challenge.gameId.replace(/-/g, ' ')}
+                                            </span>
+                                        </div>
+                                        {!challenge.completed && (
+                                            <a
+                                                href={`/games/${gameRoutes[challenge.gameId] || challenge.gameId}?daily=true`}
+                                                className="text-xs bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded transition-colors flex items-center gap-1"
+                                            >
+                                                <Play className="w-3 h-3" />
+                                                Play
+                                            </a>
+                                        )}
                                     </div>
                                 )}
                             </div>
