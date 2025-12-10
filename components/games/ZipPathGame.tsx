@@ -31,12 +31,13 @@ interface ZipPathGameProps {
         levelReached: number;
         stars: Record<number, number>;
     };
+    autoDaily?: boolean;
 }
 
-export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
+export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipPathGameProps) {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const autoDaily = searchParams.get('daily') === 'true';
+    // const searchParams = useSearchParams(); // Removed as we use prop now
+    // const autoDaily = searchParams.get('daily') === 'true'; // Removed
 
     const [gameState, setGameState] = useState<GameState>('menu');
     const [currentLevel, setCurrentLevel] = useState<ZipLevel>(ALL_LEVELS[0]);
@@ -48,7 +49,7 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     const [timerRunning, setTimerRunning] = useState(false);
     const [showReveal, setShowReveal] = useState(false);
     const [score, setScore] = useState({ score: 0, stars: 0, timeBonus: 0 });
-    const [isLoadingDaily, setIsLoadingDaily] = useState(false);
+    const [isLoadingDaily, setIsLoadingDaily] = useState(autoDaily); // Start loading immediately if autoDaily
     const [dailyLeaderboard, setDailyLeaderboard] = useState<any[]>([]);
     const [showDailyLeaderboard, setShowDailyLeaderboard] = useState(false);
     const [hintsUsed, setHintsUsed] = useState(0);
@@ -57,6 +58,44 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
     // Tutorial state
     const [showTutorial, setShowTutorial] = useState(false);
     const [hasSeenTutorial, setHasSeenTutorial] = useState(false);
+
+    const fetchDailyLeaderboard = async () => {
+        try {
+            const res = await fetch('/api/daily/leaderboard?gameId=zip-path');
+            if (res.ok) {
+                const data = await res.json();
+                setDailyLeaderboard(data.leaderboard || []);
+                setShowDailyLeaderboard(true);
+            }
+        } catch (e) {
+            console.error("Failed to fetch leaderboard", e);
+        }
+    };
+
+    const startDailyChallenge = async () => {
+        setIsLoadingDaily(true);
+        try {
+            const res = await fetch('/api/daily?gameId=zip-path');
+            if (!res.ok) throw new Error('Failed to fetch daily');
+            const level = await res.json();
+
+            if (level.completed) {
+                router.push('/daily-challenges/leaderboard?game=zip-path');
+                return;
+            }
+
+            // Ensure level has required properties
+            if (!level.numbers || !level.gridSize) throw new Error('Invalid level data');
+
+            setCurrentLevel(level);
+            setGameState('playing');
+        } catch (e) {
+            console.error("Failed to load daily challenge:", e);
+            // You might want to show a toast here
+        } finally {
+            setIsLoadingDaily(false);
+        }
+    };
 
     useEffect(() => {
         // Show tutorial if no levels completed (stars is empty) and haven't seen it yet
@@ -108,16 +147,19 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
         });
 
         // Mark blocked cells
-        currentLevel.blocked.forEach(pos => {
+        currentLevel.blocked?.forEach(pos => {
             newGrid[pos.row][pos.col].isBlocked = true;
         });
 
         setGrid(newGrid);
         setPath([]);
+        setIsDrawing(false);
         setCurrentNumber(1);
         setHintsUsed(0);
         setHintCell(null);
     }, [currentLevel]);
+
+
 
     // Timer effect with persistence
     useEffect(() => {
@@ -470,37 +512,20 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
         }
     };
 
-    const startDailyChallenge = async () => {
-        setIsLoadingDaily(true);
-        try {
-            const res = await fetch('/api/daily?gameId=zip-path');
-            if (!res.ok) throw new Error('Failed to fetch daily');
-            const level = await res.json();
-            // Ensure level has required properties
-            if (!level.numbers || !level.gridSize) throw new Error('Invalid level data');
 
-            setCurrentLevel(level);
-            setGameState('playing');
-        } catch (e) {
-            console.error("Failed to load daily challenge:", e);
-            // You might want to show a toast here
-        } finally {
-            setIsLoadingDaily(false);
-        }
-    };
 
-    const fetchDailyLeaderboard = async () => {
-        try {
-            const res = await fetch('/api/daily/leaderboard?gameId=zip-path');
-            if (res.ok) {
-                const data = await res.json();
-                setDailyLeaderboard(data.leaderboard || []);
-                setShowDailyLeaderboard(true);
-            }
-        } catch (e) {
-            console.error("Failed to fetch leaderboard", e);
-        }
-    };
+
+    // Render loading screen if daily challenge is loading
+    if (isLoadingDaily) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-950">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-cyan-400 font-medium animate-pulse">Loading Daily Challenge...</p>
+                </div>
+            </div>
+        );
+    }
 
     // Render level selection menu
     if (gameState === 'menu') {
@@ -557,27 +582,6 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                     >
                         <Home className="w-4 h-4 mr-2" />
                         Back to Home
-                    </Button>
-
-                    <Button
-                        className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0"
-                        onClick={startDailyChallenge}
-                        disabled={isLoadingDaily}
-                    >
-                        {isLoadingDaily ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                        ) : (
-                            <Sparkles className="w-4 h-4 mr-2" />
-                        )}
-                        Daily Challenge
-                    </Button>
-
-                    <Button
-                        variant="ghost"
-                        className="w-full text-slate-400 hover:text-white text-xs"
-                        onClick={fetchDailyLeaderboard}
-                    >
-                        View Today's Leaderboard
                     </Button>
                 </div>
 

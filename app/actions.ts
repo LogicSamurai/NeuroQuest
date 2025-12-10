@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { gameSessions, users, userProgress, globalStats, dailyPuzzles, dailyPuzzleResults } from "@/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { updateLeaderboardEntry, incrementGlobalGameCount, getTopPlayersPreview, getUserRank } from "@/db/queries/leaderboard";
 import { checkAchievements, getAchievementProgress } from "@/lib/achievements/checker";
 import { updateChallengeProgress, getTodayChallenges, getTimeUntilRefresh } from "@/lib/challenges/challenges";
@@ -247,11 +247,17 @@ export async function getHomepageData() {
     // Handle daily login first (might update streaks/xp)
     await handleDailyLogin(userId);
 
+    const getCachedLeaderboard = unstable_cache(
+        async () => getTopPlayersPreview('combined', 5),
+        ['homepage-leaderboard'],
+        { revalidate: 60 } // Cache for 60 seconds
+    );
+
     // Fetch all data in parallel
     const [stats, user, topPlayers, userRank, challenges, achievements] = await Promise.all([
         getUserStats(),
         getCurrentUser(),
-        getTopPlayersPreview('combined', 5),
+        getCachedLeaderboard(),
         getUserRank(userId, 'combined', 'alltime'),
         getTodayChallenges(userId),
         getAchievementProgress(userId),
@@ -259,6 +265,20 @@ export async function getHomepageData() {
 
     const timeUntilRefresh = getTimeUntilRefresh();
     const unlockedAchievements = achievements.filter(a => a.unlocked).slice(-3);
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Fetch daily puzzle completion status
+    const dailyPuzzleStatus = await db.select({
+        gameId: dailyPuzzles.gameId,
+        completed: sql<boolean>`true`
+    })
+        .from(dailyPuzzleResults)
+        .innerJoin(dailyPuzzles, eq(dailyPuzzleResults.puzzleId, dailyPuzzles.id))
+        .where(and(
+            eq(dailyPuzzleResults.userId, userId),
+            eq(dailyPuzzles.date, today)
+        ));
 
     return {
         user,
@@ -271,6 +291,7 @@ export async function getHomepageData() {
             list: challenges,
             timeUntilRefresh,
             completedCount: challenges.filter(c => c.completed).length,
+            dailyPuzzleStatus: dailyPuzzleStatus.reduce((acc, curr) => ({ ...acc, [curr.gameId]: true }), {} as Record<string, boolean>)
         },
         achievements: {
             recent: unlockedAchievements,

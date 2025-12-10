@@ -55,12 +55,13 @@ interface AlchemyLogicProps {
         levelReached: number;
         stars: Record<number, number>;
     };
+    autoDaily?: boolean;
 }
 
-export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
+export default function AlchemyLogic({ initialProgress, autoDaily = false }: AlchemyLogicProps) {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const autoDaily = searchParams.get('daily') === 'true';
+    // const searchParams = useSearchParams();
+    // const autoDaily = searchParams.get('daily') === 'true';
 
     const [view, setView] = useState<"grid" | "game">("grid");
     const [levelIdx, setLevelIdx] = useState(0);
@@ -83,7 +84,7 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
     const [dailyDate, setDailyDate] = useState<string>("");
     const [dailyLeaderboard, setDailyLeaderboard] = useState<any[]>([]);
     const [showDailyLeaderboard, setShowDailyLeaderboard] = useState(false);
-    const [isLoadingDaily, setIsLoadingDaily] = useState(false);
+    const [isLoadingDaily, setIsLoadingDaily] = useState(autoDaily); // Start loading immediately if autoDaily
     const [hintsUsed, setHintsUsed] = useState(0);
     const [hintElements, setHintElements] = useState<string[]>([]);
 
@@ -148,13 +149,63 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
         loadData();
     }, []);
 
+    const fetchDailyLeaderboard = async () => {
+        try {
+            const res = await fetch('/api/daily/leaderboard?gameId=alchemy-logic');
+            if (res.ok) {
+                const data = await res.json();
+                setDailyLeaderboard(data.leaderboard || []);
+                setShowDailyLeaderboard(true);
+            }
+        } catch (e) {
+            console.error("Failed to fetch leaderboard", e);
+        }
+    };
+
+    const startDailyChallenge = async () => {
+        setIsLoadingDaily(true);
+        try {
+            const res = await fetch('/api/daily?gameId=alchemy-logic');
+            if (!res.ok) throw new Error('Failed to fetch daily');
+            const level = await res.json();
+
+            if (level.completed) {
+                router.push('/daily-challenges/leaderboard?game=alchemy-logic');
+                return;
+            }
+
+            // Transform daily level data to match LevelData interface
+            const dailyLevel: LevelData = {
+                id: 999, // Special ID for daily
+                targetName: level.targetName,
+                targetId: level.targetId,
+                description: level.description
+            };
+
+            // Extract date from level ID (daily-YYYY-MM-DD)
+            if (level.id && typeof level.id === 'string' && level.id.startsWith('daily-')) {
+                setDailyDate(level.id.replace('daily-', ''));
+            } else {
+                setDailyDate(new Date().toISOString().split('T')[0]);
+            }
+
+            // We need to inject this level into the levels array temporarily or handle it separately
+            // For simplicity, we'll append it and select it
+            setLevels(prev => [...prev, dailyLevel]);
+            setLevelIdx(levels.length); // It will be at the end
+            setIsDaily(true);
+            setView("game");
+        } catch (e) {
+            console.error("Failed to load daily challenge:", e);
+        } finally {
+            setIsLoadingDaily(false);
+        }
+    };
+
     // Auto-start daily if requested
     useEffect(() => {
-        if (autoDaily && view === 'grid' && !isLoadingDaily) {
-            // Small delay to ensure functions are ready
-            setTimeout(() => {
-                startDailyChallenge();
-            }, 500);
+        if (autoDaily && view === 'grid') {
+            startDailyChallenge();
         }
     }, [autoDaily]);
 
@@ -196,53 +247,7 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const startDailyChallenge = async () => {
-        setIsLoadingDaily(true);
-        try {
-            const res = await fetch('/api/daily?gameId=alchemy-logic');
-            if (!res.ok) throw new Error('Failed to fetch daily');
-            const level = await res.json();
 
-            // Transform daily level data to match LevelData interface
-            const dailyLevel: LevelData = {
-                id: 999, // Special ID for daily
-                targetName: level.targetName,
-                targetId: level.targetId,
-                description: level.description
-            };
-
-            // Extract date from level ID (daily-YYYY-MM-DD)
-            if (level.id && typeof level.id === 'string' && level.id.startsWith('daily-')) {
-                setDailyDate(level.id.replace('daily-', ''));
-            } else {
-                setDailyDate(new Date().toISOString().split('T')[0]);
-            }
-
-            // We need to inject this level into the levels array temporarily or handle it separately
-            // For simplicity, we'll append it and select it
-            setLevels(prev => [...prev, dailyLevel]);
-            setLevelIdx(levels.length); // It will be at the end
-            setIsDaily(true);
-            setView("game");
-        } catch (e) {
-            console.error("Failed to load daily challenge:", e);
-        } finally {
-            setIsLoadingDaily(false);
-        }
-    };
-
-    const fetchDailyLeaderboard = async () => {
-        try {
-            const res = await fetch('/api/daily/leaderboard?gameId=alchemy-logic');
-            if (res.ok) {
-                const data = await res.json();
-                setDailyLeaderboard(data.leaderboard || []);
-                setShowDailyLeaderboard(true);
-            }
-        } catch (e) {
-            console.error("Failed to fetch leaderboard", e);
-        }
-    };
 
     // Scroll logs
     useEffect(() => {
@@ -416,6 +421,17 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
         return <Icon className={cn(size, COLORS[element.colorIdx])} />;
     };
 
+    if (isLoadingDaily) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-950">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-purple-400 font-medium animate-pulse">Loading Daily Challenge...</p>
+                </div>
+            </div>
+        );
+    }
+
     if (view === "grid") {
         return (
             <div className="w-full max-w-4xl mx-auto p-8">
@@ -431,27 +447,7 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                     </Button>
                 </div>
 
-                <div className="mb-8 flex justify-center gap-4">
-                    <Button
-                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0"
-                        onClick={startDailyChallenge}
-                        disabled={isLoadingDaily}
-                    >
-                        {isLoadingDaily ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                        ) : (
-                            <Sparkles className="w-4 h-4 mr-2" />
-                        )}
-                        Daily Challenge
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        className="text-slate-400 hover:text-white"
-                        onClick={fetchDailyLeaderboard}
-                    >
-                        View Today's Leaderboard
-                    </Button>
-                </div>
+
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                     {levels.map((level, i) => {
                         const isLocked = i + 1 > maxLevel;

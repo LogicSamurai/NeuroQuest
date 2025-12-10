@@ -26,9 +26,10 @@ export default async function DailyChallengesPage() {
 
     // Helper to find challenge status for a game
     const getChallengeStatus = (gameId: string) => {
+        const isCompleted = challenges.dailyPuzzleStatus?.[gameId] || false;
+        // Also check generic challenges if needed, but for "Play Now" vs "Leaderboard", use puzzle status
         const challenge = challenges.list.find(c => c.gameId === gameId);
-        if (!challenge) return { status: 'unavailable', completed: false };
-        return { status: 'available', completed: challenge.completed, challenge };
+        return { status: 'available', completed: isCompleted, challenge };
     };
 
     return (
@@ -104,7 +105,7 @@ export default async function DailyChallengesPage() {
                                                     className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-800"
                                                     asChild
                                                 >
-                                                    <Link href={`/games/${game.route}?daily=true`}>
+                                                    <Link href={`/daily-challenges/leaderboard?game=${game.id}`}>
                                                         <Trophy className="w-4 h-4 mr-2 text-yellow-400" />
                                                         View Leaderboard
                                                     </Link>

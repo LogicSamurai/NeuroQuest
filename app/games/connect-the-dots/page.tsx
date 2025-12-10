@@ -1,8 +1,14 @@
 import ZipPathGame from "@/components/games/ZipPathGame";
 import { getLevelProgress } from "@/app/actions";
 
-export default async function ZipPathPage() {
+export default async function ZipPathPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
     const progress = await getLevelProgress("zip-path");
+    const { daily } = await searchParams;
+    const autoDaily = daily === 'true';
 
     return (
         <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 bg-slate-950">
@@ -14,7 +20,7 @@ export default async function ZipPathPage() {
                     Connect the numbers to reveal hidden pictures!
                 </p>
             </div>
-            <ZipPathGame initialProgress={progress} />
+            <ZipPathGame initialProgress={progress} autoDaily={autoDaily} />
         </main>
     );
 }
