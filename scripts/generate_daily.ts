@@ -108,6 +108,13 @@ async function generateZipLevel(date: string) {
                 pattern: {
                     colors: Array(size).fill(Array(size).fill('#FFFFFF')), // Default white
                     shapes: Array(size).fill(Array(size).fill('circle')),
+                    name: `Daily ${date}`,
+                    emoji: '📅',
+                },
+                timeTargets: {
+                    gold: 30,
+                    silver: 60,
+                    bronze: 90,
                 }
             };
 

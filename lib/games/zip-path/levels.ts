@@ -622,15 +622,17 @@ export function calculateScore(level: ZipLevel, timeSeconds: number): {
     let stars = 0;
     let timeBonus = 0;
 
-    if (timeSeconds <= level.timeTargets.gold) {
+    const targets = level.timeTargets || { gold: 30, silver: 60, bronze: 90 };
+
+    if (timeSeconds <= targets.gold) {
         stars = 3;
-        timeBonus = Math.floor((level.timeTargets.gold - timeSeconds) * 5);
-    } else if (timeSeconds <= level.timeTargets.silver) {
+        timeBonus = Math.floor((targets.gold - timeSeconds) * 5);
+    } else if (timeSeconds <= targets.silver) {
         stars = 2;
-        timeBonus = Math.floor((level.timeTargets.silver - timeSeconds) * 3);
-    } else if (timeSeconds <= level.timeTargets.bronze) {
+        timeBonus = Math.floor((targets.silver - timeSeconds) * 3);
+    } else if (timeSeconds <= targets.bronze) {
         stars = 1;
-        timeBonus = Math.floor((level.timeTargets.bronze - timeSeconds) * 1);
+        timeBonus = Math.floor((targets.bronze - timeSeconds) * 1);
     }
 
     const difficultyMultiplier =
