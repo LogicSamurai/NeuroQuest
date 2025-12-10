@@ -673,9 +673,21 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                             <h2 className="text-4xl font-bold text-white mb-2">Congratulations!</h2>
                             <p className="text-slate-300 mb-2 text-lg">You discovered {currentLevel.targetName}!</p>
                             <p className="text-cyan-400 mb-8 text-xl font-mono">Time: {formatTime(timer)}</p>
-                            <Button onClick={nextLevel} size="lg" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold px-8 py-6 text-xl rounded-full shadow-lg hover:scale-105 transition-transform">
-                                Next Level <ArrowRight className="ml-2 w-6 h-6" />
-                            </Button>
+
+                            {isDaily ? (
+                                <div className="flex gap-4">
+                                    <Button onClick={() => setView("grid")} size="lg" variant="outline" className="border-slate-600 text-white hover:bg-slate-800">
+                                        Back to Menu
+                                    </Button>
+                                    <Button onClick={() => { setShowDailyLeaderboard(true); setView("grid"); }} size="lg" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold">
+                                        View Leaderboard
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Button onClick={nextLevel} size="lg" className="bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold px-8 py-6 text-xl rounded-full shadow-lg hover:scale-105 transition-transform">
+                                    Next Level <ArrowRight className="ml-2 w-6 h-6" />
+                                </Button>
+                            )}
                         </motion.div>
                     )}
                 </div>

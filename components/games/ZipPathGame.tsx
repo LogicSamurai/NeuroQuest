@@ -327,8 +327,6 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
 
         setGameState('completed');
 
-        setGameState('completed');
-
         // Calculate score with hint penalty (e.g., -10% per hint)
         const rawScore = calculateScore(currentLevel, timer);
         const penalty = Math.min(0.5, hintsUsed * 0.1); // Max 50% penalty
@@ -340,18 +338,6 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
         };
 
         setScore(scoreResult);
-
-        // Update level stars
-        const currentStars = levelStars[currentLevel.id] || 0;
-        if (scoreResult.stars > currentStars) {
-            setLevelStars(prev => ({ ...prev, [currentLevel.id]: scoreResult.stars }));
-        }
-
-        // Unlock next level
-        const nextLevelId = currentLevel.id + 1;
-        if (ALL_LEVELS.find(l => l.id === nextLevelId)) {
-            setUnlockedLevels(prev => new Set([...prev, nextLevelId]));
-        }
 
         // Celebration
         confetti({
@@ -366,27 +352,49 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
             setShowReveal(true);
         }, 500);
 
-        // Save to leaderboard
+        // Save logic
         try {
-            await saveGameSession(
-                'zip-path',
-                scoreResult.score,
-                currentLevel.id,
-                scoreResult.stars * 33.33,
-                { duration: timer, level: currentLevel.id }
-            );
+            const isDaily = currentLevel.id.toString().startsWith('daily-');
 
-            // Save level progress (stars and level reached)
-            await saveLevelProgress('zip-path', currentLevel.id, scoreResult.stars);
-
-            // If it's a daily challenge, save to daily results
-            if (currentLevel.id.toString().startsWith('daily-')) {
+            if (isDaily) {
+                // Daily Challenge Save
                 await saveDailyResult(
                     'zip-path',
                     currentLevel.id.toString().replace('daily-', ''), // Date is part of ID
                     scoreResult.score,
                     timer
                 );
+                // Also save session for history, but use 0 or special ID for level/difficulty
+                await saveGameSession(
+                    'zip-path',
+                    scoreResult.score,
+                    2, // Medium difficulty equivalent
+                    scoreResult.stars * 33.33,
+                    { duration: timer, level: -1 } // -1 indicates daily
+                );
+            } else {
+                // Campaign Level Save
+                // Update level stars
+                const currentStars = levelStars[currentLevel.id as number] || 0;
+                if (scoreResult.stars > currentStars) {
+                    setLevelStars(prev => ({ ...prev, [currentLevel.id]: scoreResult.stars }));
+                }
+
+                // Unlock next level
+                const nextLevelId = (currentLevel.id as number) + 1;
+                if (ALL_LEVELS.find(l => l.id === nextLevelId)) {
+                    setUnlockedLevels(prev => new Set([...prev, nextLevelId]));
+                }
+
+                await saveGameSession(
+                    'zip-path',
+                    scoreResult.score,
+                    currentLevel.id as number,
+                    scoreResult.stars * 33.33,
+                    { duration: timer, level: currentLevel.id as number }
+                );
+
+                await saveLevelProgress('zip-path', currentLevel.id as number, scoreResult.stars);
             }
         } catch (e) {
             console.error('Failed to save game session', e);
@@ -633,7 +641,11 @@ export default function ZipPathGame({ initialProgress }: ZipPathGameProps) {
                 score={score}
                 time={timer}
                 onContinue={() => {
-                    if (ALL_LEVELS.find(l => l.id === currentLevel.id + 1)) {
+                    const isDaily = currentLevel.id.toString().startsWith('daily-');
+                    if (isDaily) {
+                        setShowDailyLeaderboard(true);
+                        goToMenu();
+                    } else if (ALL_LEVELS.find(l => l.id === (currentLevel.id as number) + 1)) {
                         nextLevel();
                     } else {
                         goToMenu();
