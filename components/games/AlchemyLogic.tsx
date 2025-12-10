@@ -417,6 +417,28 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                         Home
                     </Button>
                 </div>
+
+                <div className="mb-8 flex justify-center gap-4">
+                    <Button
+                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0"
+                        onClick={startDailyChallenge}
+                        disabled={isLoadingDaily}
+                    >
+                        {isLoadingDaily ? (
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                        ) : (
+                            <Sparkles className="w-4 h-4 mr-2" />
+                        )}
+                        Daily Challenge
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        className="text-slate-400 hover:text-white"
+                        onClick={fetchDailyLeaderboard}
+                    >
+                        View Today's Leaderboard
+                    </Button>
+                </div>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                     {levels.map((level, i) => {
                         const isLocked = i + 1 > maxLevel;
@@ -466,27 +488,7 @@ export default function AlchemyLogic({ initialProgress }: AlchemyLogicProps) {
                     })}
                 </div>
 
-                <div className="mt-8 flex justify-center gap-4">
-                    <Button
-                        className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0"
-                        onClick={startDailyChallenge}
-                        disabled={isLoadingDaily}
-                    >
-                        {isLoadingDaily ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                        ) : (
-                            <Sparkles className="w-4 h-4 mr-2" />
-                        )}
-                        Daily Challenge
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        className="text-slate-400 hover:text-white"
-                        onClick={fetchDailyLeaderboard}
-                    >
-                        View Today's Leaderboard
-                    </Button>
-                </div>
+
 
                 {showDailyLeaderboard && (
                     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
