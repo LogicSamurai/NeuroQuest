@@ -1,11 +1,11 @@
 
 import { db } from '../lib/db';
-import { gameLevels, dailyPuzzles } from '../db/schema';
+import { gameLevels, dailyPuzzles, userProgress } from '../db/schema';
 import { findHamiltonianPath, Grid } from './fix_levels';
 import fs from 'fs';
 import path from 'path';
 import * as dotenv from 'dotenv';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 dotenv.config({ path: '.env.local' });
 dotenv.config();
@@ -135,24 +135,42 @@ async function generateZipLevel(date: string) {
 }
 
 async function generateAlchemyLevel(date: string) {
-    const alchemyPath = path.join(process.cwd(), 'public', 'games', 'alchemy', 'data.json');
-    const data = JSON.parse(fs.readFileSync(alchemyPath, 'utf-8'));
-    const elements = data.elements;
+    // 1. Get average user level for Alchemy
+    const result = await db.select({ value: sql<number>`avg(${userProgress.levelReached})` })
+        .from(userProgress)
+        .where(eq(userProgress.gameId, 'alchemy-logic'));
 
-    // Pick random element ID > 20 (to avoid too easy ones)
-    const eligible = elements.filter((e: any) => parseInt(e.id) > 20);
-    const target = eligible[Math.floor(Math.random() * eligible.length)];
+    const avgLevel = Math.floor(result[0]?.value || 5); // Default to level 5 if no data
+    console.log(`Average Alchemy level: ${avgLevel}`);
+
+    // 2. Load levels.json
+    const levelsPath = path.join(process.cwd(), 'public', 'games', 'alchemy', 'levels.json');
+    const levels = JSON.parse(fs.readFileSync(levelsPath, 'utf-8'));
+
+    // 3. Pick a level around the average (e.g., +/- 5 levels)
+    // Ensure we don't go below 1 or above max levels
+    const minLevel = Math.max(1, avgLevel - 5);
+    const maxLevel = Math.min(levels.length, avgLevel + 5);
+
+    // Filter levels in range
+    const eligibleLevels = levels.filter((l: any) => l.id >= minLevel && l.id <= maxLevel);
+
+    // Fallback if something is wrong
+    const pool = eligibleLevels.length > 0 ? eligibleLevels : levels.slice(0, 10);
+
+    // Pick random level from pool
+    const targetLevel = pool[Math.floor(Math.random() * pool.length)];
 
     const levelData = {
         id: `daily-${date}`,
-        targetName: target.name,
-        targetId: target.id,
-        description: `Create ${target.name}`,
+        targetName: targetLevel.targetName,
+        targetId: targetLevel.targetId,
+        description: `Create ${targetLevel.targetName}`,
     };
 
     const [level] = await db.insert(gameLevels).values({
         gameId: 'alchemy-logic',
-        name: `Daily ${target.name}`,
+        name: `Daily ${targetLevel.targetName}`,
         difficulty: 'medium',
         data: JSON.stringify(levelData),
         isCampaign: false,
