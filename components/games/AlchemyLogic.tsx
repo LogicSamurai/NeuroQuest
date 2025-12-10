@@ -343,8 +343,9 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
         if (isDaily) {
             // Use the date from the level, or fallback to today
             const date = dailyDate || new Date().toISOString().split('T')[0];
-            // Reduce score by 10 per hint (min 10)
-            const score = Math.max(10, 100 - (hintsUsed * 10));
+            // Reduce score by 15 per hint and 0.5 per second
+            // Formula: 100 - (15 * hints) - (time / 2)
+            const score = Math.max(0, 100 - (hintsUsed * 15) - Math.floor(timer / 2));
             await saveDailyResult('alchemy-logic', date, score, timer);
         } else {
             // Reduce stars: 0 hints = 3 stars, 1-2 hints = 2 stars, 3+ = 1 star
@@ -361,31 +362,116 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
 
         const targetId = currentLevel.targetId;
 
-        // Strategy 1: Find a recipe that directly produces the target using discovered elements
-        const directRecipe = recipes.find(r =>
-            r.output === targetId &&
-            discovered.includes(r.input1) &&
-            discovered.includes(r.input2)
-        );
+        // BFS to find shortest path from discovered elements to target
+        // Queue stores: [elementId, firstRecipeInPath]
+        const queue: { id: string, firstRecipe: Recipe | null }[] = [];
+        const visited = new Set<string>(discovered);
 
-        if (directRecipe) {
-            setHintElements([directRecipe.input1, directRecipe.input2]);
-            return;
+        // Initialize queue with all discovered elements
+        // We don't need a firstRecipe for initial elements as we already have them
+        for (const id of discovered) {
+            queue.push({ id, firstRecipe: null });
         }
 
-        // Strategy 2: Find a recipe that produces an undiscovered element using discovered elements
-        const intermediateRecipe = recipes.find(r =>
-            !discovered.includes(r.output) &&
-            discovered.includes(r.input1) &&
-            discovered.includes(r.input2)
-        );
+        // We also need to track how we got to each element to reconstruct the path if needed,
+        // but here we just need the *first* recipe that leads to an undiscovered element on the path.
+        // Actually, a better BFS approach for this specific problem:
+        // We want to find a recipe (A + B = C) where A and B are reachable, and C leads to Target.
 
-        if (intermediateRecipe) {
-            setHintElements([intermediateRecipe.input1, intermediateRecipe.input2]);
-            return;
+        // Let's try a simpler backward search or forward search.
+        // Forward search from discovered elements is better.
+
+        // 1. Identify all "Makeable" elements (immediate next steps)
+        // 2. See if Target is in Makeable. If yes, show that recipe.
+        // 3. If not, treat Makeable as discovered and repeat (BFS layers).
+        // 4. Trace back which recipe in Layer 1 led to the solution.
+
+        const layers: Set<string>[] = [new Set(discovered)];
+        const recipeTrace: Map<string, Recipe> = new Map(); // Maps elementId -> Recipe that created it
+
+        let found = false;
+        let maxDepth = 10; // Safety break
+        let currentLayerIdx = 0;
+
+        while (!found && currentLayerIdx < maxDepth) {
+            const currentLayer = layers[currentLayerIdx];
+            const nextLayer = new Set<string>();
+
+            // Try all recipes
+            for (const recipe of recipes) {
+                // If we can make this recipe using elements from *any* previous layer (including current)
+                // AND the output hasn't been seen yet
+                const input1Available = layers.some(l => l.has(recipe.input1));
+                const input2Available = layers.some(l => l.has(recipe.input2));
+
+                // Optimization: At least one input must be from the CURRENT layer, 
+                // otherwise we would have found this in a previous layer.
+                const usesCurrentLayer = currentLayer.has(recipe.input1) || currentLayer.has(recipe.input2);
+
+                if (input1Available && input2Available && usesCurrentLayer) {
+                    const outputId = recipe.output;
+
+                    // Check if already visited in any layer
+                    const alreadySeen = layers.some(l => l.has(outputId)) || nextLayer.has(outputId);
+
+                    if (!alreadySeen) {
+                        nextLayer.add(outputId);
+                        recipeTrace.set(outputId, recipe);
+
+                        if (outputId === targetId) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (nextLayer.size === 0) break; // Dead end
+            layers.push(nextLayer);
+            currentLayerIdx++;
         }
 
-        // Strategy 3: If no useful recipe found, just highlight two random discovered elements
+        if (found) {
+            // Trace back to find the FIRST step (a recipe we can do RIGHT NOW)
+            let curr = targetId;
+            let recipeToHint: Recipe | undefined;
+
+            while (curr) {
+                const recipe = recipeTrace.get(curr);
+                if (!recipe) break; // Should not happen if found is true
+
+                // Check if this recipe is doable NOW (inputs are in discovered)
+                if (discovered.includes(recipe.input1) && discovered.includes(recipe.input2)) {
+                    recipeToHint = recipe;
+                    break; // Found the immediate next step!
+                }
+
+                // Move backwards
+                // We need to find which input was the "new" one in the chain? 
+                // Actually, if the recipe isn't doable now, it means one of its inputs is not discovered.
+                // So we recurse on that undiscovered input.
+
+                const in1Discovered = discovered.includes(recipe.input1);
+                const in2Discovered = discovered.includes(recipe.input2);
+
+                if (!in1Discovered) {
+                    curr = recipe.input1;
+                } else if (!in2Discovered) {
+                    curr = recipe.input2;
+                } else {
+                    // Both discovered? Then this IS the recipe to hint.
+                    recipeToHint = recipe;
+                    break;
+                }
+            }
+
+            if (recipeToHint) {
+                setHintElements([recipeToHint.input1, recipeToHint.input2]);
+                return;
+            }
+        }
+
+        // Fallback: Random discovered elements (should rarely happen if graph is connected)
         if (discovered.length >= 2) {
             const shuffled = [...discovered].sort(() => 0.5 - Math.random());
             setHintElements([shuffled[0], shuffled[1]]);

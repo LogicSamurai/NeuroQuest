@@ -379,10 +379,16 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
 
         setGameState('completed');
 
-        // Calculate score with hint penalty (e.g., -10% per hint)
+        // Calculate score with flat hint penalty based on difficulty
         const rawScore = calculateScore(currentLevel, timer);
-        const penalty = Math.min(0.5, hintsUsed * 0.1); // Max 50% penalty
-        const finalScore = Math.floor(rawScore.score * (1 - penalty));
+
+        let penaltyPerHint = 20; // Easy
+        if (currentLevel.difficulty === 'medium') penaltyPerHint = 50;
+        if (currentLevel.difficulty === 'hard') penaltyPerHint = 100;
+        if (currentLevel.difficulty === 'expert') penaltyPerHint = 150;
+
+        const totalPenalty = hintsUsed * penaltyPerHint;
+        const finalScore = Math.max(0, rawScore.score - totalPenalty);
 
         const scoreResult = {
             ...rawScore,
