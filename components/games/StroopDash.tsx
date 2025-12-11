@@ -94,7 +94,7 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
             return () => clearInterval(timer);
         } else if (timeLeft === 0 && isPlaying) {
             setIsPlaying(false);
-            saveGameSession("stroop-dash", score, 1, 100); // Simple difficulty/accuracy for now
+            saveGameSession("stroop-dash", score, 1, 100, undefined, true); // Award base XP (no levels)
 
             // Update local high score if needed
             if (score > highScore) {

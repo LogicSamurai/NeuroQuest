@@ -54,7 +54,8 @@ export async function saveGameSession(
         level?: number;
         moves?: number;
         discoveredElements?: number;
-    }
+    },
+    awardBaseXp: boolean = false // Default to false for strict XP
 ) {
     const userId = await ensureUser();
     const sessionId = crypto.randomUUID();
@@ -87,17 +88,29 @@ export async function saveGameSession(
     // Award XP for game completion
     const multiplier = getCurrentMultiplier();
     let totalXpAwarded = 0;
+    let leveledUp = false;
+    let newLevel = 0;
 
-    // Base XP for completing
-    const baseXp = XP_AWARDS.gameComplete;
-    const xpResult = await awardXp(userId, baseXp, 'game', { gameId, score }, multiplier.value);
-    totalXpAwarded += xpResult.xpAwarded || 0;
+    // Base XP for completing (Only if explicitly requested, e.g. for non-level games)
+    if (awardBaseXp) {
+        const baseXp = XP_AWARDS.gameComplete;
+        const xpResult = await awardXp(userId, baseXp, 'game', { gameId, score }, multiplier.value);
+        totalXpAwarded += xpResult.xpAwarded || 0;
+        if (xpResult.leveledUp) {
+            leveledUp = true;
+            newLevel = xpResult.newLevel;
+        }
+    }
 
     // Bonus XP for high scores (top 10 on leaderboard)
     const userRank = await getUserRank(userId, gameId, 'alltime');
     if (userRank.rank && userRank.rank <= 10) {
         const highScoreXp = await awardXp(userId, XP_AWARDS.highScore, 'game', { gameId, reason: 'high_score' }, multiplier.value);
         totalXpAwarded += highScoreXp.xpAwarded || 0;
+        if (highScoreXp.leveledUp) {
+            leveledUp = true;
+            newLevel = highScoreXp.newLevel;
+        }
     }
 
     // Check daily challenges
@@ -113,6 +126,10 @@ export async function saveGameSession(
     for (const _challengeId of completedChallenges) {
         const challengeXp = await awardXp(userId, XP_AWARDS.challengeComplete, 'challenge', { gameId });
         totalXpAwarded += challengeXp.xpAwarded || 0;
+        if (challengeXp.leveledUp) {
+            leveledUp = true;
+            newLevel = challengeXp.newLevel;
+        }
     }
 
     // Check achievements
@@ -133,11 +150,17 @@ export async function saveGameSession(
             rarity === 'epic' ? XP_AWARDS.achievementEpic :
                 rarity === 'rare' ? XP_AWARDS.achievementRare :
                     XP_AWARDS.achievementCommon;
-        await awardXp(userId, achievementXp, 'achievement', { achievementId: achievement.achievement.id });
+        const achievementXpResult = await awardXp(userId, achievementXp, 'achievement', { achievementId: achievement.achievement.id });
+        if (achievementXpResult.leveledUp) {
+            leveledUp = true;
+            newLevel = achievementXpResult.newLevel;
+        }
     }
 
     // Get updated level info
     const levelInfo = await getUserLevel(userId);
+    // If we didn't level up from actions, use current level
+    if (!newLevel) newLevel = levelInfo.level;
 
     revalidatePath("/");
     revalidatePath(`/games/${gameId}`);
@@ -148,8 +171,8 @@ export async function saveGameSession(
         xpAwarded: totalXpAwarded,
         multiplier: multiplier.value > 1 ? multiplier : null,
         levelInfo,
-        leveledUp: xpResult.leveledUp,
-        newLevel: xpResult.newLevel,
+        leveledUp,
+        newLevel,
         completedChallenges: completedChallenges.length,
         newAchievements,
         loginResult,
@@ -166,15 +189,26 @@ export async function saveLevelProgress(gameId: string, level: number, stars: nu
 
     if (progress) {
         const currentStars = JSON.parse(progress.stars || "{}");
-        const newStars = { ...currentStars, [level]: Math.max(currentStars[level] || 0, stars) };
+        const oldStars = currentStars[level] || 0;
 
-        await db.update(userProgress)
-            .set({
-                levelReached: Math.max(progress.levelReached, level + 1),
-                stars: JSON.stringify(newStars),
-                updatedAt: new Date()
-            })
-            .where(eq(userProgress.id, progress.id));
+        // Only update if new stars are higher
+        if (stars > oldStars) {
+            const newStarsMap = { ...currentStars, [level]: stars };
+            const deltaStars = stars - oldStars;
+
+            await db.update(userProgress)
+                .set({
+                    levelReached: Math.max(progress.levelReached, level + 1),
+                    stars: JSON.stringify(newStarsMap),
+                    updatedAt: new Date()
+                })
+                .where(eq(userProgress.id, progress.id));
+
+            // Award XP for NEW stars only
+            if (deltaStars > 0) {
+                await awardXp(userId, deltaStars * XP_AWARDS.star, 'game', { gameId, level, starsEarned: deltaStars });
+            }
+        }
     } else {
         await db.insert(userProgress).values({
             id: crypto.randomUUID(),
@@ -183,6 +217,9 @@ export async function saveLevelProgress(gameId: string, level: number, stars: nu
             levelReached: level + 1,
             stars: JSON.stringify({ [level]: stars }),
         });
+
+        // First time playing this game? Award for initial stars
+        await awardXp(userId, stars * XP_AWARDS.star, 'game', { gameId, level, starsEarned: stars });
     }
     revalidatePath(`/games/${gameId}`);
 }

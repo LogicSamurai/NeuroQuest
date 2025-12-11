@@ -32,6 +32,7 @@ export const XP_AWARDS = {
     gameWin: 25,
     perfectScore: 50,
     highScore: 30,
+    star: 50, // 50 XP per star earned
 
     // Daily actions
     dailyLogin: 10,

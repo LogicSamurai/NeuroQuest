@@ -193,14 +193,17 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
         }
 
         setShowReveal(false);
+    }, [currentLevel, initializeGrid]);
 
+    // Timer control
+    useEffect(() => {
         // Auto-start timer if we are in playing state
         if (gameState === 'playing') {
             setTimerRunning(true);
         } else {
             setTimerRunning(false);
         }
-    }, [currentLevel, initializeGrid, gameState]);
+    }, [gameState]);
 
     // Calculate cell size based on container
     useEffect(() => {
@@ -430,7 +433,8 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                     scoreResult.score,
                     2, // Medium difficulty equivalent
                     scoreResult.stars * 33.33,
-                    { duration: timer, level: -1 } // -1 indicates daily
+                    { duration: timer, level: -1 }, // -1 indicates daily
+                    true // Daily gets base XP
                 );
             } else {
                 // Campaign Level Save
@@ -451,7 +455,8 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                     scoreResult.score,
                     currentLevel.id as number,
                     scoreResult.stars * 33.33,
-                    { duration: timer, level: currentLevel.id as number }
+                    { duration: timer, level: currentLevel.id as number },
+                    false // No base XP, only stars
                 );
 
                 await saveLevelProgress('zip-path', currentLevel.id as number, scoreResult.stars);
@@ -468,8 +473,9 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
 
     const resetLevel = () => {
         initializeGrid();
-        setTimer(0);
-        localStorage.removeItem(`zip-timer-${currentLevel.id}`);
+        // Do NOT reset timer - keep total time
+        // setTimer(0); 
+        // localStorage.removeItem(`zip-timer-${currentLevel.id}`);
         setTimerRunning(true); // Auto-restart on reset
         setShowReveal(false);
         setGameState('playing');

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Flame, Droplets, Wind, Mountain, Zap, Snowflake, Sun, Moon, RotateCcw, Play, Sparkles, Atom, Leaf, Skull, Heart, Star, Cloud, Anchor, Feather, Key, Trophy, ArrowRight, Lock, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { saveLevelProgress, getLevelProgress, saveDailyResult } from "@/app/actions";
+import { saveLevelProgress, getLevelProgress, saveDailyResult, saveGameSession } from "@/app/actions";
 import confetti from "canvas-confetti";
 
 // Extended Icon Set (Fallback)
@@ -215,14 +215,20 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
             setCauldron([]);
             setIsLevelComplete(false);
             setNotification(null);
-            setTimer(0);
+
+            // Load saved timer or start fresh
+            const savedTime = localStorage.getItem(`alchemy-timer-${currentLevel.id}`);
+            if (savedTime) {
+                setTimer(parseInt(savedTime));
+            } else {
+                setTimer(0);
+            }
+
             setTimerRunning(true);
             setHintsUsed(0);
             setHintElements([]);
 
             // Reset discovered elements to basics for the new level
-            // This ensures players have to rediscover/recreate complex elements for each level challenge
-            // or at least starts them fresh.
             setDiscovered(["1", "2", "3", "4"]);
         } else {
             setTimerRunning(false);
@@ -235,11 +241,17 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
         let interval: NodeJS.Timeout;
         if (timerRunning) {
             interval = setInterval(() => {
-                setTimer(t => t + 1);
+                setTimer(t => {
+                    const newTime = t + 1;
+                    if (currentLevel) {
+                        localStorage.setItem(`alchemy-timer-${currentLevel.id}`, newTime.toString());
+                    }
+                    return newTime;
+                });
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [timerRunning]);
+    }, [timerRunning, currentLevel]);
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -333,6 +345,9 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
     const handleWin = async () => {
         setIsLevelComplete(true);
         setTimerRunning(false);
+        if (currentLevel) {
+            localStorage.removeItem(`alchemy-timer-${currentLevel.id}`);
+        }
         confetti({
             particleCount: 150,
             spread: 70,
@@ -360,6 +375,17 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
         } else {
             // Reduce stars: 0 hints = 3 stars, 1-2 hints = 2 stars, 3+ = 1 star
             const stars = hintsUsed === 0 ? 3 : hintsUsed <= 2 ? 2 : 1;
+
+            // Save session for stats (no base XP, only stars XP via saveLevelProgress)
+            await saveGameSession(
+                'alchemy-logic',
+                500 + Math.max(0, 300 - timer) - (hintsUsed * 50), // Score estimate
+                1,
+                100,
+                { duration: timer, level: levelIdx + 1 },
+                false
+            );
+
             saveLevelProgress("alchemy-logic", levelIdx + 1, stars);
         }
     };
