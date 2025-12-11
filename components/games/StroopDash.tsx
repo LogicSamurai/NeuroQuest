@@ -124,7 +124,7 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
     }, [isPlaying, colorIdx, wordIdx, mode]);
 
     return (
-        <div className="relative w-full max-w-2xl mx-auto h-[85vh] md:h-[600px] bg-slate-900/50 rounded-xl p-4 md:p-8 border border-slate-700 shadow-2xl backdrop-blur-sm flex flex-col items-center justify-between">
+        <div className="relative w-full max-w-2xl mx-auto h-[85dvh] md:h-[600px] bg-slate-900/50 rounded-xl p-2 md:p-8 border border-slate-700 shadow-2xl backdrop-blur-sm flex flex-col items-center justify-between overflow-hidden">
 
             {/* HUD */}
             <div className="w-full flex justify-between items-start">
@@ -143,16 +143,16 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
             {/* Game Area */}
             <div className="flex-1 flex flex-col items-center justify-center w-full relative">
                 {!isPlaying ? (
-                    <div className="text-center">
-                        <Zap className="w-20 h-20 text-yellow-400 mx-auto mb-6" />
-                        <h2 className="text-3xl font-bold text-white mb-4">Stroop Dash</h2>
+                    <div className="text-center flex flex-col items-center justify-center h-full space-y-2 md:space-y-6">
+                        <Zap className="w-12 h-12 md:w-16 md:h-16 text-yellow-400 mx-auto" />
+                        <h2 className="text-xl md:text-3xl font-bold text-white">Stroop Dash</h2>
                         {highScore > 0 && (
-                            <div className="mb-4 flex flex-col items-center">
-                                <span className="text-slate-400 text-sm uppercase tracking-wider">High Score</span>
-                                <span className="text-2xl font-bold text-yellow-400">{highScore}</span>
+                            <div className="flex flex-col items-center">
+                                <span className="text-slate-400 text-[10px] uppercase tracking-wider">High Score</span>
+                                <span className="text-lg font-bold text-yellow-400">{highScore}</span>
                             </div>
                         )}
-                        <p className="text-slate-300 mb-8 max-w-md">
+                        <p className="text-slate-300 max-w-md text-xs md:text-base px-2">
                             React fast! Match the <span className="text-green-400 font-bold">COLOR</span> or the <span className="text-red-400 font-bold">WORD</span> based on the rule.
                         </p>
                         <div className="flex gap-4 justify-center">
@@ -196,7 +196,7 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
                             initial={{ scale: 0.5, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             className={cn(
-                                "text-6xl md:text-8xl font-black tracking-tighter filter drop-shadow-2xl transition-colors duration-200",
+                                "text-4xl md:text-8xl font-black tracking-tighter filter drop-shadow-2xl transition-colors duration-200",
                                 COLORS[colorIdx].text
                             )}
                         >
@@ -225,13 +225,13 @@ export default function StroopDash({ initialStats }: StroopDashProps) {
 
             {/* Controls */}
             {isPlaying && (
-                <div className="grid grid-cols-2 gap-4 w-full max-w-md">
+                <div className="grid grid-cols-2 gap-2 md:gap-4 w-full max-w-md">
                     {COLORS.map((c, i) => (
                         <button
                             key={c.name}
                             onClick={() => handleInput(i)}
                             className={cn(
-                                "h-24 rounded-xl font-bold text-2xl text-white shadow-lg transform transition-all active:scale-95 border-b-4 border-black/20",
+                                "h-16 md:h-24 rounded-xl font-bold text-xl md:text-2xl text-white shadow-lg transform transition-all active:scale-95 border-b-4 border-black/20",
                                 c.value
                             )}
                         >

@@ -632,14 +632,14 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
     const targetElement = elements.find(e => e.id === currentLevel.targetId);
 
     return (
-        <div className="w-full max-w-6xl mx-auto h-[85vh] md:h-[800px] bg-slate-950 rounded-xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col md:flex-row">
+        <div className="w-full max-w-6xl mx-auto h-[95dvh] md:h-[800px] bg-slate-950 rounded-xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col md:flex-row">
 
             {/* LEFT: Elements Sidebar */}
-            <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col order-2 md:order-1 h-1/3 md:h-full">
+            <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col order-2 md:order-1 h-[35%] md:h-full">
                 <div className="p-4 border-b border-slate-800 bg-slate-900/50">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Elements</h3>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 grid grid-cols-4 md:grid-cols-3 gap-2 content-start">
+                <div className="flex-1 overflow-y-auto p-2 grid grid-cols-6 md:grid-cols-3 gap-1 content-start">
                     {discovered.map(id => {
                         const el = getElement(id);
                         return (
@@ -656,8 +656,8 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
                                     hintElements.includes(id) && "ring-2 ring-yellow-400 animate-pulse"
                                 )}
                             >
-                                {renderIcon(el, "w-6 h-6")}
-                                <span className="text-[10px] mt-1 text-slate-300 truncate w-full text-center px-1">{el?.name}</span>
+                                {renderIcon(el, "w-5 h-5 md:w-6 md:h-6")}
+                                <span className="text-[9px] mt-0.5 text-slate-300 truncate w-full text-center px-0.5">{el?.name}</span>
                             </motion.button>
                         );
                     })}
@@ -665,7 +665,7 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
             </div>
 
             {/* CENTER: Mixing Area */}
-            <div className="flex-1 bg-slate-950 relative flex flex-col order-1 md:order-2 h-2/3 md:h-full">
+            <div className="flex-1 bg-slate-950 relative flex flex-col order-1 md:order-2 h-[65%] md:h-full">
 
                 {/* Header / Target */}
                 <div className="p-4 flex justify-between items-center border-b border-slate-800">
@@ -701,7 +701,7 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
                         {/* Slot 1 */}
                         <div
                             onClick={() => removeFromCauldron(0)}
-                            className="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/50 flex items-center justify-center cursor-pointer hover:border-slate-500 transition-colors relative"
+                            className="w-20 h-20 md:w-32 md:h-32 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/50 flex items-center justify-center cursor-pointer hover:border-slate-500 transition-colors relative"
                         >
                             {cauldron[0] !== undefined ? (
                                 <motion.div layoutId={`element-${cauldron[0]}`} className="flex flex-col items-center">
@@ -729,7 +729,7 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
                         {/* Slot 2 */}
                         <div
                             onClick={() => removeFromCauldron(1)}
-                            className="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/50 flex items-center justify-center cursor-pointer hover:border-slate-500 transition-colors relative"
+                            className="w-20 h-20 md:w-32 md:h-32 rounded-2xl border-2 border-dashed border-slate-700 bg-slate-900/50 flex items-center justify-center cursor-pointer hover:border-slate-500 transition-colors relative"
                         >
                             {cauldron[1] !== undefined ? (
                                 <motion.div layoutId={`element-${cauldron[1]}`} className="flex flex-col items-center">

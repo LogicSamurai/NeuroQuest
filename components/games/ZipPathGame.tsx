@@ -205,7 +205,9 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
     // Calculate cell size based on container
     useEffect(() => {
         if (gridRef.current) {
-            const containerSize = Math.min(window.innerWidth - 32, 400);
+            const width = window.innerWidth - 32;
+            const height = window.innerHeight - 200; // Account for header/footer
+            const containerSize = Math.min(width, height, 400);
             cellSize.current = Math.floor(containerSize / currentLevel.gridSize);
         }
     }, [currentLevel.gridSize]);
@@ -712,7 +714,7 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                     }
                 ]}
             />
-            <div className="w-full max-w-md mx-auto">
+            <div className="w-full max-w-md mx-auto min-h-[90dvh] flex flex-col justify-center">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <Button
