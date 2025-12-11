@@ -663,9 +663,7 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                 onContinue={() => {
                     const isDaily = currentLevel.id.toString().startsWith('daily-');
                     if (isDaily) {
-                        fetchDailyLeaderboard();
-                        setShowDailyLeaderboard(true);
-                        goToMenu();
+                        router.push('/daily-challenges/leaderboard?game=zip-path');
                     } else if (ALL_LEVELS.find(l => l.id === (currentLevel.id as number) + 1)) {
                         nextLevel();
                     } else {

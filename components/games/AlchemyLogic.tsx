@@ -776,7 +776,7 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
                                     <Button onClick={() => setView("grid")} size="lg" variant="outline" className="border-slate-600 text-white hover:bg-slate-800">
                                         Back to Menu
                                     </Button>
-                                    <Button onClick={() => { fetchDailyLeaderboard(); setShowDailyLeaderboard(true); setView("grid"); }} size="lg" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold">
+                                    <Button onClick={() => router.push('/daily-challenges/leaderboard?game=alchemy-logic')} size="lg" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold">
                                         View Leaderboard
                                     </Button>
                                 </div>
