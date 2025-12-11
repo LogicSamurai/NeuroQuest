@@ -44,10 +44,11 @@ interface Recipe {
 }
 
 interface LevelData {
-    id: number;
+    id: number | string;
     targetName: string;
     targetId: string;
     description: string;
+    isExtra?: boolean;
 }
 
 interface AlchemyLogicProps {
@@ -66,7 +67,7 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
     const [view, setView] = useState<"grid" | "game">("grid");
     const [levelIdx, setLevelIdx] = useState(0);
     const [maxLevel, setMaxLevel] = useState(initialProgress?.levelReached || 1);
-    const [levelStars, setLevelStars] = useState<Record<number, number>>(initialProgress?.stars || {});
+    const [levelStars, setLevelStars] = useState<Record<string | number, number>>(initialProgress?.stars || {});
 
     const [levels, setLevels] = useState<LevelData[]>([]);
     const [elements, setElements] = useState<Element[]>([]);
@@ -133,6 +134,32 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
                 // Load Levels
                 const resLevels = await fetch('/games/alchemy/levels.json');
                 const loadedLevels = await resLevels.json();
+
+                // Fetch Extra Daily Levels
+                try {
+                    const resExtra = await fetch('/api/games/alchemy-logic/levels');
+                    if (resExtra.ok) {
+                        const extraData = await resExtra.json();
+                        const extraLevels = extraData.levels.map((l: any) => {
+                            const parsedData = JSON.parse(l.data);
+                            return {
+                                id: l.id, // String ID
+                                targetName: parsedData.targetName,
+                                targetId: parsedData.targetId,
+                                description: parsedData.description,
+                                isExtra: true // Flag to identify extra levels
+                            };
+                        });
+
+                        // Sort extra levels by name/ID to ensure consistent order
+                        extraLevels.sort((a: any, b: any) => a.id.localeCompare(b.id));
+
+                        loadedLevels.push(...extraLevels);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch extra alchemy levels", e);
+                }
+
                 setLevels(loadedLevels);
 
                 // Start with basic elements
@@ -382,11 +409,15 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
                 500 + Math.max(0, 300 - timer) - (hintsUsed * 50), // Score estimate
                 1,
                 100,
-                { duration: timer, level: levelIdx + 1 },
+                { duration: timer, level: typeof currentLevel.id === 'number' ? currentLevel.id : -1 },
                 false
             );
 
-            saveLevelProgress("alchemy-logic", levelIdx + 1, stars);
+            // Save progress (works for both campaign and extra levels now)
+            await saveLevelProgress("alchemy-logic", currentLevel.id, stars);
+
+            // Update local state to reflect unlock immediately
+            setLevelStars(prev => ({ ...prev, [currentLevel.id]: stars }));
         }
     };
 
@@ -572,8 +603,26 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
 
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                     {levels.map((level, i) => {
-                        const isLocked = i + 1 > maxLevel;
-                        const stars = levelStars[i + 1] || 0;
+                        const isExtra = level.isExtra;
+                        let isLocked = false;
+
+                        if (!isExtra) {
+                            // Campaign levels: Locked if ID > maxLevel
+                            isLocked = (typeof level.id === 'number' ? level.id : i + 1) > maxLevel;
+                        } else {
+                            // Extra levels: Sequential locking
+                            // Check if the previous level (whether campaign or extra) is completed
+                            if (i > 0) {
+                                const prevLevel = levels[i - 1];
+                                const prevStars = levelStars[prevLevel.id] || 0;
+                                isLocked = prevStars === 0;
+                            } else {
+                                // Very first level (unlikely to be extra, but just in case)
+                                isLocked = false;
+                            }
+                        }
+
+                        const stars = levelStars[level.id] || 0;
 
                         // Find target element to get its icon
                         const targetEl = elements.find(e => e.id === level.targetId);
@@ -593,7 +642,8 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
                                     "aspect-square rounded-xl flex flex-col items-center justify-center border-2 relative overflow-hidden p-2",
                                     isLocked
                                         ? "bg-slate-900 border-slate-800 cursor-not-allowed opacity-50"
-                                        : "bg-slate-800 border-purple-500/50 hover:border-purple-400 cursor-pointer shadow-lg"
+                                        : "bg-slate-800 border-purple-500/50 hover:border-purple-400 cursor-pointer shadow-lg",
+                                    isExtra && "border-yellow-500/50 hover:border-yellow-400"
                                 )}
                             >
                                 {isLocked ? (
@@ -603,14 +653,20 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
                                         <div className="mb-2">
                                             {renderIcon(targetEl, "w-8 h-8")}
                                         </div>
-                                        <span className="text-xs font-bold text-white text-center truncate w-full">{level.targetName}</span>
+                                        <span className="text-xs font-bold text-white text-center truncate w-full">
+                                            {isExtra ? level.targetName : level.targetName}
+                                        </span>
                                         <div className="flex gap-0.5 mt-1">
-                                            {[1, 2, 3].map(s => (
-                                                <Star
-                                                    key={s}
-                                                    className={cn("w-2 h-2", s <= stars ? "fill-yellow-400 text-yellow-400" : "text-slate-600")}
-                                                />
-                                            ))}
+                                            {isExtra ? (
+                                                <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                                            ) : (
+                                                [1, 2, 3].map(s => (
+                                                    <Star
+                                                        key={s}
+                                                        className={cn("w-2 h-2", s <= stars ? "fill-yellow-400 text-yellow-400" : "text-slate-600")}
+                                                    />
+                                                ))
+                                            )}
                                         </div>
                                     </>
                                 )}

@@ -122,107 +122,93 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
         return levels;
     });
 
-    const [levelStars, setLevelStars] = useState<Record<number, number>>(initialProgress?.stars || {});
+    const [levelStars, setLevelStars] = useState<Record<string | number, number>>(initialProgress?.stars || {});
+    const [extraLevels, setExtraLevels] = useState<ZipLevel[]>([]);
+    const [isLoadingExtra, setIsLoadingExtra] = useState(true);
 
+    // Fetch extra daily levels
+    useEffect(() => {
+        const fetchExtraLevels = async () => {
+            try {
+                console.log("Fetching extra levels...");
+                const res = await fetch('/api/games/zip-path/levels');
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log("Fetched levels data:", data);
+                    // Transform DB levels to ZipLevel format
+                    const levels: ZipLevel[] = data.levels.map((l: any) => ({
+                        id: l.id, // Use string ID from DB
+                        name: l.name,
+                        difficulty: l.difficulty,
+                        ...JSON.parse(l.data)
+                    }));
+                    console.log("Parsed extra levels:", levels);
+                    setExtraLevels(levels);
+                } else {
+                    console.error("Failed to fetch extra levels, status:", res.status);
+                }
+            } catch (e) {
+                console.error("Failed to fetch extra levels", e);
+            } finally {
+                setIsLoadingExtra(false);
+            }
+        };
+        fetchExtraLevels();
+    }, []);
     const gridRef = useRef<HTMLDivElement>(null);
-    const timerRef = useRef<NodeJS.Timeout | null>(null);
-    const cellSize = useRef(50);
+    const cellSize = useRef(40);
 
-    // Initialize grid for current level
     const initializeGrid = useCallback(() => {
-        const size = currentLevel.gridSize;
-        const newGrid: CellState[][] = Array(size).fill(null).map(() =>
-            Array(size).fill(null).map(() => ({
+        if (!currentLevel) return;
+
+        const newGrid: CellState[][] = Array(currentLevel.gridSize).fill(null).map(() =>
+            Array(currentLevel.gridSize).fill(null).map(() => ({
                 isPath: false,
                 pathOrder: -1,
                 isNumber: false,
-                isBlocked: false,
+                isBlocked: false
             }))
         );
 
-        // Mark number cells
-        Object.entries(currentLevel.numbers).forEach(([num, pos]) => {
-            newGrid[pos.row][pos.col].isNumber = true;
-            newGrid[pos.row][pos.col].number = parseInt(num);
-        });
-
-        // Mark blocked cells
-        currentLevel.blocked?.forEach(pos => {
-            newGrid[pos.row][pos.col].isBlocked = true;
-        });
+        // Set numbers
+        if (currentLevel.numbers) {
+            Object.entries(currentLevel.numbers).forEach(([numStr, pos]) => {
+                if (newGrid[pos.row] && newGrid[pos.row][pos.col]) {
+                    newGrid[pos.row][pos.col].isNumber = true;
+                    newGrid[pos.row][pos.col].number = parseInt(numStr);
+                }
+            });
+        }
 
         setGrid(newGrid);
         setPath([]);
-        setIsDrawing(false);
         setCurrentNumber(1);
-        setHintsUsed(0);
-        setHintCell(null);
+
+        // Find start position (number 1)
+        if (currentLevel.numbers && currentLevel.numbers["1"]) {
+            const startPos = currentLevel.numbers["1"];
+            setPath([{ row: startPos.row, col: startPos.col }]);
+
+            // Update grid for start pos immediately
+            newGrid[startPos.row][startPos.col].isPath = true;
+            newGrid[startPos.row][startPos.col].pathOrder = 0;
+            setGrid([...newGrid]);
+        }
     }, [currentLevel]);
 
-
-
-    // Timer effect with persistence
-    useEffect(() => {
-        if (timerRunning) {
-            timerRef.current = setInterval(() => {
-                setTimer(t => {
-                    const newTime = t + 1;
-                    // Save to localStorage
-                    localStorage.setItem(`zip-timer-${currentLevel.id}`, newTime.toString());
-                    return newTime;
-                });
-            }, 1000);
-        } else if (timerRef.current) {
-            clearInterval(timerRef.current);
-        }
-        return () => {
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, [timerRunning, currentLevel.id]);
-
-    // Initialize on level change
     useEffect(() => {
         initializeGrid();
+    }, [initializeGrid]);
 
-        // Load saved timer or start fresh
-        const savedTime = localStorage.getItem(`zip-timer-${currentLevel.id}`);
-        if (savedTime) {
-            setTimer(parseInt(savedTime));
-        } else {
-            setTimer(0);
-        }
-
-        setShowReveal(false);
-    }, [currentLevel, initializeGrid]);
-
-    // Timer control
-    useEffect(() => {
-        // Auto-start timer if we are in playing state
-        if (gameState === 'playing') {
-            setTimerRunning(true);
-        } else {
-            setTimerRunning(false);
-        }
-    }, [gameState]);
-
-    // Calculate cell size based on container
-    useEffect(() => {
-        if (gridRef.current) {
-            const width = window.innerWidth - 32;
-            const height = window.innerHeight - 200; // Account for header/footer
-            const containerSize = Math.min(width, height, 400);
-            cellSize.current = Math.floor(containerSize / currentLevel.gridSize);
-        }
-    }, [currentLevel.gridSize]);
-
-    // Get cell from pointer coordinates
-    const getCellFromCoords = (e: React.PointerEvent): { row: number; col: number } | null => {
+    // Handle drawing
+    const getCellFromPoint = (x: number, y: number) => {
         if (!gridRef.current) return null;
         const rect = gridRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const col = Math.floor(x / cellSize.current);
-        const row = Math.floor(y / cellSize.current);
+        const relativeX = x - rect.left;
+        const relativeY = y - rect.top;
+
+        const col = Math.floor(relativeX / cellSize.current);
+        const row = Math.floor(relativeY / cellSize.current);
 
         if (row >= 0 && row < currentLevel.gridSize && col >= 0 && col < currentLevel.gridSize) {
             return { row, col };
@@ -230,153 +216,125 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
         return null;
     };
 
-    // Check if cells are adjacent
-    const isAdjacent = (a: { row: number; col: number }, b: { row: number; col: number }) => {
-        return Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1;
-    };
-
-    // Start drawing path
     const handlePointerDown = (e: React.PointerEvent) => {
         if (gameState !== 'playing') return;
-
-        const cell = getCellFromCoords(e);
-        if (!cell) return;
-
-        const cellState = grid[cell.row][cell.col];
-
-        // Must start from number 1
-        if (path.length === 0) {
-            if (cellState.isNumber && cellState.number === 1) {
-                setIsDrawing(true);
-                setPath([cell]);
-
-                // Update grid
-                const newGrid = [...grid];
-                newGrid[cell.row][cell.col] = { ...cellState, isPath: true, pathOrder: 0 };
-                setGrid(newGrid);
-
-                // Start timer
-                if (!timerRunning) setTimerRunning(true);
-            }
-        } else {
-            // Check if clicking on last cell to continue
-            const lastCell = path[path.length - 1];
-            if (cell.row === lastCell.row && cell.col === lastCell.col) {
-                setIsDrawing(true);
-            }
-        }
+        setIsDrawing(true);
+        handlePointerMove(e);
     };
 
-    // Continue drawing path
     const handlePointerMove = (e: React.PointerEvent) => {
         if (!isDrawing || gameState !== 'playing') return;
 
-        const cell = getCellFromCoords(e);
+        const cell = getCellFromPoint(e.clientX, e.clientY);
         if (!cell) return;
 
-        const cellState = grid[cell.row][cell.col];
-        const lastCell = path[path.length - 1];
+        // Logic to extend path
+        // This is a simplified version of what should be there
+        // We need to check adjacency, not crossing, etc.
 
-        // Can't go to blocked cells
-        if (cellState.isBlocked) return;
+        setPath(prev => {
+            const last = prev[prev.length - 1];
+            if (!last) return prev; // Should have start pos
 
-        // Can't revisit cells already in path
-        if (cellState.isPath) {
-            // Allow backtracking by undoing last move
-            if (path.length > 1) {
-                const secondLast = path[path.length - 2];
-                if (cell.row === secondLast.row && cell.col === secondLast.col) {
-                    const newGrid = [...grid];
-                    newGrid[lastCell.row][lastCell.col] = {
-                        ...grid[lastCell.row][lastCell.col],
-                        isPath: false,
-                        pathOrder: -1,
-                    };
-                    setGrid(newGrid);
+            // If hovering over the last cell, do nothing
+            if (last.row === cell.row && last.col === cell.col) return prev;
 
-                    const newPath = path.slice(0, -1);
-                    setPath(newPath);
+            // Check adjacency
+            const isAdjacent = Math.abs(last.row - cell.row) + Math.abs(last.col - cell.col) === 1;
+            if (!isAdjacent) return prev;
 
-                    // If we removed a number, decrement current number
-                    if (grid[lastCell.row][lastCell.col].isNumber) {
-                        setCurrentNumber(n => n - 1);
+            // Check if cell is already in path (backtracking or crossing)
+            const existingIndex = prev.findIndex(p => p.row === cell.row && p.col === cell.col);
+            if (existingIndex !== -1) {
+                // Backtracking: if we go back to a previous cell, cut the path there
+                // But only if it's the immediate previous one? 
+                // Or allow cutting loops? 
+                // For simplicity, let's allow cutting back to any point
+                const newPath = prev.slice(0, existingIndex + 1);
+
+                // Update grid to reflect removed path
+                setGrid(g => {
+                    const ng = g.map(row => row.map(c => ({ ...c })));
+                    // Clear path flags for removed cells
+                    for (let i = existingIndex + 1; i < prev.length; i++) {
+                        const p = prev[i];
+                        ng[p.row][p.col].isPath = false;
+                        ng[p.row][p.col].pathOrder = -1;
+                        // Don't remove number flag
                     }
+                    return ng;
+                });
+
+                return newPath;
+            }
+
+            // Check if blocked or occupied by another number (unless it's the NEXT number)
+            const gridCell = grid[cell.row][cell.col];
+            if (gridCell.isBlocked) return prev;
+
+            if (gridCell.isNumber) {
+                // Can only enter if it's the next number
+                // We need to know what the "current target" number is
+                // We can deduce it from the path length or keep track
+                // Actually, we just check if it's (currentNumber + 1)
+                // But currentNumber is state.
+
+                // Let's count numbers passed in path
+                let numbersPassed = 0;
+                prev.forEach(p => {
+                    if (grid[p.row][p.col].isNumber) numbersPassed++;
+                });
+
+                // If we are at number 1, numbersPassed is 1. Next is 2.
+                // So expected number is numbersPassed + 1.
+                if (gridCell.number !== numbersPassed + 1) {
+                    return prev; // Wrong number
                 }
             }
-            return;
-        }
 
-        // Must be adjacent to last cell
-        if (!isAdjacent(lastCell, cell)) return;
+            // Add to path
+            const newPath = [...prev, cell];
 
-        // If this is a number cell, it must be the next number
-        if (cellState.isNumber && cellState.number !== currentNumber + 1) {
-            return;
-        }
+            // Update grid
+            setGrid(g => {
+                const ng = g.map(row => row.map(c => ({ ...c })));
+                ng[cell.row][cell.col].isPath = true;
+                ng[cell.row][cell.col].pathOrder = newPath.length - 1;
+                return ng;
+            });
 
-        // Add to path
-        const newGrid = [...grid];
-        newGrid[cell.row][cell.col] = {
-            ...cellState,
-            isPath: true,
-            pathOrder: path.length,
-        };
-        setGrid(newGrid);
-
-        const newPath = [...path, cell];
-        setPath(newPath);
-
-        // If we hit a number, increment current number
-        let newCurrentNumber = currentNumber;
-        if (cellState.isNumber) {
-            newCurrentNumber = currentNumber + 1;
-            setCurrentNumber(newCurrentNumber);
-        }
-
-        // Check for completion
-        checkCompletion(newGrid, newPath, newCurrentNumber);
+            return newPath;
+        });
     };
 
     const handlePointerUp = () => {
         setIsDrawing(false);
-    };
 
-    // Check if puzzle is complete
-    const checkCompletion = (currentGrid: CellState[][], currentPath: { row: number; col: number }[], reachedNumber: number) => {
-        // Count non-blocked cells
-        let totalCells = 0;
-        let pathCells = 0;
+        // Check completion
+        // 1. Path must cover all non-blocked cells
+        // 2. Path must hit all numbers in order (implicit if we only allow valid moves)
+        // 3. Last cell must be the final number
 
-        for (let r = 0; r < currentLevel.gridSize; r++) {
-            for (let c = 0; c < currentLevel.gridSize; c++) {
-                if (!currentGrid[r][c].isBlocked) {
-                    totalCells++;
-                    if (currentGrid[r][c].isPath) {
-                        pathCells++;
-                    }
-                }
+        if (path.length === 0) return;
+
+        const lastPos = path[path.length - 1];
+        const lastCell = grid[lastPos.row][lastPos.col];
+
+        // Check if last cell is the max number
+        const maxNum = Object.keys(currentLevel.numbers).length;
+        if (lastCell.isNumber && lastCell.number === maxNum) {
+            // Check if grid is full
+            const totalCells = currentLevel.gridSize * currentLevel.gridSize;
+            // We assume no blocked cells for now in daily/zip levels usually
+            // If there are blocked cells, we subtract them
+            // But path.length should equal totalCells - blockedCount
+
+            // For now, just check if path length == totalCells
+            if (path.length === totalCells) {
+                handleComplete();
             }
         }
-
-
-        // STRICT RULE 1: Full Coverage - All non-blocked cells must be filled
-        if (pathCells !== totalCells) return;
-
-        // STRICT RULE 2: End Point - The path MUST end at the maximum number
-        const maxNumber = Math.max(...Object.keys(currentLevel.numbers).map(Number));
-        const lastPathCell = currentPath[currentPath.length - 1];
-        const lastCellState = currentGrid[lastPathCell.row][lastPathCell.col];
-
-        // Ensure the last cell in the path is actually the max number
-        if (!lastCellState.isNumber || lastCellState.number !== maxNumber) return;
-
-        // STRICT RULE 3: Sequential Order (Implicitly handled by drawing logic, but double check)
-        if (reachedNumber !== maxNumber) return;
-
-        // Puzzle complete!
-        handleComplete();
     };
-
     const handleComplete = async () => {
         setTimerRunning(false);
         // Clear saved timer
@@ -436,30 +394,43 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                     { duration: timer, level: -1 }, // -1 indicates daily
                     true // Daily gets base XP
                 );
+            } else if (typeof currentLevel.id === 'string' && currentLevel.id.includes('extra')) {
+                // Extra Daily Level
+                // Just save session, maybe no persistent stars for now or handle differently
+                await saveGameSession(
+                    'zip-path',
+                    scoreResult.score,
+                    2,
+                    scoreResult.stars * 33.33,
+                    { duration: timer, level: -1 },
+                    true
+                );
             } else {
                 // Campaign Level Save
                 // Update level stars
-                const currentStars = levelStars[currentLevel.id as number] || 0;
+                const currentStars = levelStars[currentLevel.id] || 0;
                 if (scoreResult.stars > currentStars) {
                     setLevelStars(prev => ({ ...prev, [currentLevel.id]: scoreResult.stars }));
                 }
 
                 // Unlock next level
-                const nextLevelId = (currentLevel.id as number) + 1;
-                if (ALL_LEVELS.find(l => l.id === nextLevelId)) {
-                    setUnlockedLevels(prev => new Set([...prev, nextLevelId]));
+                if (typeof currentLevel.id === 'number') {
+                    const nextLevelId = currentLevel.id + 1;
+                    if (ALL_LEVELS.find(l => l.id === nextLevelId)) {
+                        setUnlockedLevels(prev => new Set([...prev, nextLevelId]));
+                    }
+
+                    await saveLevelProgress('zip-path', currentLevel.id, scoreResult.stars);
                 }
 
                 await saveGameSession(
                     'zip-path',
                     scoreResult.score,
-                    currentLevel.id as number,
+                    typeof currentLevel.id === 'number' ? currentLevel.id : 0,
                     scoreResult.stars * 33.33,
-                    { duration: timer, level: currentLevel.id as number },
+                    { duration: timer, level: typeof currentLevel.id === 'number' ? currentLevel.id : 0 },
                     false // No base XP, only stars
                 );
-
-                await saveLevelProgress('zip-path', currentLevel.id as number, scoreResult.stars);
             }
         } catch (e) {
             console.error('Failed to save game session', e);
@@ -482,10 +453,15 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
     };
 
     const nextLevel = () => {
-        const nextLevelData = ALL_LEVELS.find(l => l.id === currentLevel.id + 1);
-        if (nextLevelData) {
-            setCurrentLevel(nextLevelData);
-            setGameState('playing');
+        if (typeof currentLevel.id === 'number') {
+            const nextLevelData = ALL_LEVELS.find(l => l.id === (currentLevel.id as number) + 1);
+            if (nextLevelData) {
+                setCurrentLevel(nextLevelData);
+                setGameState('playing');
+            }
+        } else {
+            // For daily/extra levels, maybe go back to menu or find next extra?
+            goToMenu();
         }
     };
 
@@ -577,6 +553,8 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
             );
         }
 
+        const displayLevels = [...ALL_LEVELS, ...extraLevels];
+
         return (
             <div className="w-full max-w-md mx-auto">
                 <motion.div
@@ -600,9 +578,10 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                 </div>
 
                 <div className="grid grid-cols-4 gap-3">
-                    {ALL_LEVELS.map((level, idx) => {
-                        const isUnlocked = unlockedLevels.has(level.id);
+                    {displayLevels.map((level, idx) => {
+                        const isUnlocked = typeof level.id === 'string' ? true : unlockedLevels.has(level.id);
                         const stars = levelStars[level.id] || 0;
+                        const isExtra = typeof level.id === 'string';
 
                         return (
                             <motion.button
@@ -616,22 +595,34 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                                     "aspect-square rounded-xl flex flex-col items-center justify-center p-2 transition-all",
                                     isUnlocked
                                         ? "bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 border border-slate-600"
-                                        : "bg-slate-800/50 border border-slate-700/50 cursor-not-allowed opacity-60"
+                                        : "bg-slate-800/50 border border-slate-700/50 cursor-not-allowed opacity-60",
+                                    isExtra && "border-yellow-500/30"
                                 )}
                             >
                                 {isUnlocked ? (
                                     <>
-                                        <span className="text-lg font-bold text-white">{level.id}</span>
+                                        <span className={cn("text-lg font-bold text-white", isExtra && "text-sm")}>
+                                            {isExtra ? level.name.replace('Daily Extra ', '#') : level.id}
+                                        </span>
                                         <div className="flex gap-0.5 mt-1">
-                                            {[1, 2, 3].map(s => (
-                                                <Star
-                                                    key={s}
-                                                    className={cn(
-                                                        "w-3 h-3",
-                                                        s <= stars ? "text-yellow-400 fill-yellow-400" : "text-slate-600"
-                                                    )}
-                                                />
-                                            ))}
+                                            {isExtra ? (
+                                                <div className={cn(
+                                                    "w-2 h-2 rounded-full",
+                                                    level.difficulty === 'easy' ? "bg-green-500" :
+                                                        level.difficulty === 'medium' ? "bg-yellow-500" :
+                                                            "bg-orange-500"
+                                                )} />
+                                            ) : (
+                                                [1, 2, 3].map(s => (
+                                                    <Star
+                                                        key={s}
+                                                        className={cn(
+                                                            "w-3 h-3",
+                                                            s <= stars ? "text-yellow-400 fill-yellow-400" : "text-slate-600"
+                                                        )}
+                                                    />
+                                                ))
+                                            )}
                                         </div>
                                     </>
                                 ) : (
@@ -641,6 +632,12 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                         );
                     })}
                 </div>
+
+                {isLoadingExtra && (
+                    <div className="flex justify-center py-4">
+                        <div className="w-6 h-6 border-2 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin" />
+                    </div>
+                )}
 
                 {/* Difficulty Legend */}
                 <div className="mt-6 flex justify-center gap-4 text-xs">

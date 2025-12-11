@@ -3,7 +3,7 @@
 // Pattern reveals on completion
 
 export interface ZipLevel {
-    id: number;
+    id: number | string;
     name: string;
     difficulty: 'easy' | 'medium' | 'hard' | 'expert';
     gridSize: number;
@@ -602,7 +602,7 @@ export const ALL_LEVELS: ZipLevel[] = [
 ];
 
 // Get level by ID
-export function getLevelById(id: number): ZipLevel | undefined {
+export function getLevelById(id: number | string): ZipLevel | undefined {
     return ALL_LEVELS.find(level => level.id === id);
 }
 

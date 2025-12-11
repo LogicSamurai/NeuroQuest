@@ -192,7 +192,7 @@ export default function DailyChallengesCard({
                                         </div>
                                         {!challenge.completed && (
                                             <a
-                                                href={`/games/${gameRoutes[challenge.gameId] || challenge.gameId}?daily=true`}
+                                                href={`/games/${gameRoutes[challenge.gameId] || challenge.gameId}`}
                                                 className="text-xs bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded transition-colors flex items-center gap-1"
                                             >
                                                 <Play className="w-3 h-3" />

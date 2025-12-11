@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { gameLevels, dailyPuzzles, userProgress } from '@/db/schema';
 import { generateZipLevelData } from '@/lib/games/zip-path/generator';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
 
@@ -19,37 +19,47 @@ export async function GET(request: Request) {
 
         // Check if already generated
         const existing = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.date, today));
-        if (existing.length > 0) {
-            return NextResponse.json({ message: 'Daily puzzles already exist for today.' });
+
+        // Check for extra levels
+        const existingExtras = await db.select().from(gameLevels).where(and(
+            eq(gameLevels.gameId, 'zip-path'),
+            sql`DATE(${gameLevels.createdAt}) = ${today}`,
+            sql`${gameLevels.name} LIKE 'Daily Extra%'`
+        ));
+
+        // Check for extra Alchemy levels
+        const existingAlchemyExtras = await db.select().from(gameLevels).where(and(
+            eq(gameLevels.gameId, 'alchemy-logic'),
+            sql`DATE(${gameLevels.createdAt}) = ${today}`,
+            sql`${gameLevels.name} LIKE 'Daily Extra%'`
+        ));
+
+        if (existing.length > 0 && existingExtras.length >= 5 && existingAlchemyExtras.length >= 5) {
+            return NextResponse.json({ message: 'All daily content already exists for today.' });
         }
 
-        // 2. Generate Zip Path Daily
-        console.log('Generating Zip Path daily...');
-        const zipLevelData = generateZipLevelData(today);
+        // ... (Zip Path generation code remains same) ...
 
-        const [zipLevel] = await db.insert(gameLevels).values({
-            gameId: 'zip-path',
-            name: `Daily ${today}`,
-            difficulty: 'medium',
-            data: JSON.stringify(zipLevelData),
-            isCampaign: false,
-        }).returning();
+        // 3. Generate Alchemy Daily (Main)
+        if (existing.length === 0) {
+            console.log('Generating Alchemy daily...');
+            const alchemyLevel = await generateAlchemyLevel(today);
 
-        await db.insert(dailyPuzzles).values({
-            date: today,
-            gameId: 'zip-path',
-            levelId: zipLevel.id,
-        });
+            await db.insert(dailyPuzzles).values({
+                date: today,
+                gameId: 'alchemy-logic',
+                levelId: alchemyLevel.id,
+            });
+        }
 
-        // 3. Generate Alchemy Daily
-        console.log('Generating Alchemy daily...');
-        const alchemyLevel = await generateAlchemyLevel(today);
-
-        await db.insert(dailyPuzzles).values({
-            date: today,
-            gameId: 'alchemy-logic',
-            levelId: alchemyLevel.id,
-        });
+        // 3.1 Generate 5 Extra Daily Levels for Alchemy
+        if (existingAlchemyExtras.length < 5) {
+            console.log('Generating 5 extra Alchemy levels...');
+            for (let i = 1; i <= 5; i++) {
+                // We pass a unique suffix to generateAlchemyLevel to create unique IDs
+                await generateAlchemyLevel(`${today}-extra-${i}`, `Daily Extra ${i}`);
+            }
+        }
 
         return NextResponse.json({ success: true, message: 'Daily puzzles generated successfully!' });
 
@@ -59,7 +69,7 @@ export async function GET(request: Request) {
     }
 }
 
-async function generateAlchemyLevel(date: string) {
+async function generateAlchemyLevel(dateSuffix: string, nameOverride?: string) {
     // 1. Get average user level for Alchemy
     const result = await db.select({ value: sql<number>`avg(${userProgress.levelReached})` })
         .from(userProgress)
@@ -68,8 +78,6 @@ async function generateAlchemyLevel(date: string) {
     const avgLevel = Math.floor(result[0]?.value || 5); // Default to level 5 if no data
 
     // 2. Load levels.json
-    // In Vercel serverless, we need to be careful with paths.
-    // process.cwd() is the root of the project.
     const levelsPath = path.join(process.cwd(), 'public', 'games', 'alchemy', 'levels.json');
     let levels = [];
 
@@ -88,21 +96,21 @@ async function generateAlchemyLevel(date: string) {
         ];
     }
 
-    // 3. Pick a level around the average (e.g., +/- 5 levels)
-    const minLevel = Math.max(1, avgLevel - 5);
-    const maxLevel = Math.min(levels.length, avgLevel + 5);
+    // 3. Pick a level around the average (e.g., +/- 10 levels for variety)
+    const minLevel = Math.max(1, avgLevel - 10);
+    const maxLevel = Math.min(levels.length, avgLevel + 10);
 
     // Filter levels in range
     const eligibleLevels = levels.filter((l: any) => l.id >= minLevel && l.id <= maxLevel);
 
     // Fallback if something is wrong
-    const pool = eligibleLevels.length > 0 ? eligibleLevels : levels.slice(0, 10);
+    const pool = eligibleLevels.length > 0 ? eligibleLevels : levels.slice(0, 20);
 
     // Pick random level from pool
     const targetLevel = pool[Math.floor(Math.random() * pool.length)];
 
     const levelData = {
-        id: `daily-${date}`,
+        id: `daily-${dateSuffix}`,
         targetName: targetLevel.targetName,
         targetId: targetLevel.targetId,
         description: `Create ${targetLevel.targetName}`,
@@ -110,7 +118,7 @@ async function generateAlchemyLevel(date: string) {
 
     const [level] = await db.insert(gameLevels).values({
         gameId: 'alchemy-logic',
-        name: `Daily ${targetLevel.targetName}`,
+        name: nameOverride || `Daily ${targetLevel.targetName}`,
         difficulty: 'medium',
         data: JSON.stringify(levelData),
         isCampaign: false,

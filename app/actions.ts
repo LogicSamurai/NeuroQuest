@@ -179,7 +179,7 @@ export async function saveGameSession(
     };
 }
 
-export async function saveLevelProgress(gameId: string, level: number, stars: number) {
+export async function saveLevelProgress(gameId: string, level: number | string, stars: number) {
     const userId = await ensureUser();
 
     const progress = await db.select().from(userProgress)
@@ -196,12 +196,18 @@ export async function saveLevelProgress(gameId: string, level: number, stars: nu
             const newStarsMap = { ...currentStars, [level]: stars };
             const deltaStars = stars - oldStars;
 
+            const updateData: any = {
+                stars: JSON.stringify(newStarsMap),
+                updatedAt: new Date()
+            };
+
+            // Only update levelReached for numeric campaign levels
+            if (typeof level === 'number') {
+                updateData.levelReached = Math.max(progress.levelReached, level + 1);
+            }
+
             await db.update(userProgress)
-                .set({
-                    levelReached: Math.max(progress.levelReached, level + 1),
-                    stars: JSON.stringify(newStarsMap),
-                    updatedAt: new Date()
-                })
+                .set(updateData)
                 .where(eq(userProgress.id, progress.id));
 
             // Award XP for NEW stars only
@@ -210,11 +216,13 @@ export async function saveLevelProgress(gameId: string, level: number, stars: nu
             }
         }
     } else {
+        const initialLevelReached = typeof level === 'number' ? level + 1 : 1;
+
         await db.insert(userProgress).values({
             id: crypto.randomUUID(),
             userId,
             gameId,
-            levelReached: level + 1,
+            levelReached: initialLevelReached,
             stars: JSON.stringify({ [level]: stars }),
         });
 
