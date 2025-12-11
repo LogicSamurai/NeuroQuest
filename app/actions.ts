@@ -18,7 +18,7 @@ export async function signInAction() {
 }
 
 export async function signOutAction() {
-    await signOut();
+    await signOut({ redirectTo: '/' });
 }
 
 // Helper to get authenticated user
@@ -245,7 +245,7 @@ export async function getHomepageData() {
     if (!userId) return null;
 
     // Handle daily login first (might update streaks/xp)
-    await handleDailyLogin(userId);
+    // await handleDailyLogin(userId); // Removed to prevent streak update on visit
 
     const getCachedLeaderboard = unstable_cache(
         async () => getTopPlayersPreview('combined', 5),

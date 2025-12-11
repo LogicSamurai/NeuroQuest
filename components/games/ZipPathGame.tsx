@@ -205,7 +205,9 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
     // Calculate cell size based on container
     useEffect(() => {
         if (gridRef.current) {
-            const containerSize = Math.min(window.innerWidth - 32, 400);
+            const width = window.innerWidth - 32;
+            const height = window.innerHeight - 200; // Account for header/footer
+            const containerSize = Math.min(width, height, 400);
             cellSize.current = Math.floor(containerSize / currentLevel.gridSize);
         }
     }, [currentLevel.gridSize]);
@@ -379,10 +381,16 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
 
         setGameState('completed');
 
-        // Calculate score with hint penalty (e.g., -10% per hint)
+        // Calculate score with flat hint penalty based on difficulty
         const rawScore = calculateScore(currentLevel, timer);
-        const penalty = Math.min(0.5, hintsUsed * 0.1); // Max 50% penalty
-        const finalScore = Math.floor(rawScore.score * (1 - penalty));
+
+        // Hint Penalty: 50 points per hint (Consistent with Alchemy)
+        const penaltyPerHint = 50;
+        const totalPenalty = hintsUsed * penaltyPerHint;
+
+        // Final Score = (Base + TimeBonus) - Penalty
+        // Floor: 50 points
+        const finalScore = Math.max(50, rawScore.score - totalPenalty);
 
         const scoreResult = {
             ...rawScore,
@@ -657,9 +665,7 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                 onContinue={() => {
                     const isDaily = currentLevel.id.toString().startsWith('daily-');
                     if (isDaily) {
-                        fetchDailyLeaderboard();
-                        setShowDailyLeaderboard(true);
-                        goToMenu();
+                        router.push('/daily-challenges/leaderboard?game=zip-path');
                     } else if (ALL_LEVELS.find(l => l.id === (currentLevel.id as number) + 1)) {
                         nextLevel();
                     } else {
@@ -708,7 +714,7 @@ export default function ZipPathGame({ initialProgress, autoDaily = false }: ZipP
                     }
                 ]}
             />
-            <div className="w-full max-w-md mx-auto">
+            <div className="w-full max-w-md mx-auto min-h-[90dvh] flex flex-col justify-center">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <Button
