@@ -343,9 +343,19 @@ export default function AlchemyLogic({ initialProgress, autoDaily = false }: Alc
         if (isDaily) {
             // Use the date from the level, or fallback to today
             const date = dailyDate || new Date().toISOString().split('T')[0];
-            // Reduce score by 15 per hint and 0.5 per second
-            // Formula: 100 - (15 * hints) - (time / 2)
-            const score = Math.max(0, 100 - (hintsUsed * 15) - Math.floor(timer / 2));
+
+            // Fair Scoring Formula
+            // Base: 500
+            // Time Bonus: Max(0, 300 - timer) -> 5 minute window
+            // Penalty: 50 per hint
+            // Floor: 100
+            const baseScore = 500;
+            const timeBonus = Math.max(0, 300 - timer);
+            const hintPenalty = hintsUsed * 50;
+
+            const rawScore = baseScore + timeBonus - hintPenalty;
+            const score = Math.max(100, rawScore);
+
             await saveDailyResult('alchemy-logic', date, score, timer);
         } else {
             // Reduce stars: 0 hints = 3 stars, 1-2 hints = 2 stars, 3+ = 1 star

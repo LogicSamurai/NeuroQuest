@@ -616,32 +616,62 @@ export function calculateScore(level: ZipLevel, timeSeconds: number): {
     score: number;
     stars: number;
     timeBonus: number;
+    medal: 'gold' | 'silver' | 'bronze' | 'none';
 } {
-    const baseScore = level.gridSize * level.gridSize * 10;
+    // 1. Calculate Total Playable Cells
+    const blockedCount = level.blocked ? level.blocked.length : 0;
+    const totalCells = (level.gridSize * level.gridSize) - blockedCount;
 
-    let stars = 0;
+    // 2. Base Score: 10 points per cell
+    const baseScore = totalCells * 10;
+
+    // 3. Time Targets (Dynamic or Fallback)
+    const targets = level.timeTargets || {
+        gold: totalCells * 2,
+        silver: totalCells * 3,
+        bronze: totalCells * 4
+    };
+
     let timeBonus = 0;
+    let medal: 'gold' | 'silver' | 'bronze' | 'none' = 'none';
+    let stars = 0;
 
-    const targets = level.timeTargets || { gold: 30, silver: 60, bronze: 90 };
-
+    // 4. Calculate Time Bonus with Tiered Interpolation
     if (timeSeconds <= targets.gold) {
+        // Gold Tier
+        timeBonus = 300;
+        medal = 'gold';
         stars = 3;
-        timeBonus = Math.floor((targets.gold - timeSeconds) * 5);
     } else if (timeSeconds <= targets.silver) {
+        // Silver Tier (150 - 299)
+        // Ratio: How close to Gold? (1.0 = Gold, 0.0 = Silver)
+        const ratio = (targets.silver - timeSeconds) / (targets.silver - targets.gold);
+        timeBonus = Math.floor(150 + (ratio * 149));
+        medal = 'silver';
         stars = 2;
-        timeBonus = Math.floor((targets.silver - timeSeconds) * 3);
     } else if (timeSeconds <= targets.bronze) {
+        // Bronze Tier (50 - 149)
+        // Ratio: How close to Silver? (1.0 = Silver, 0.0 = Bronze)
+        const ratio = (targets.bronze - timeSeconds) / (targets.bronze - targets.silver);
+        timeBonus = Math.floor(50 + (ratio * 99));
+        medal = 'bronze';
         stars = 1;
-        timeBonus = Math.floor((targets.bronze - timeSeconds) * 1);
+    } else {
+        // No Medal
+        timeBonus = 0;
+        medal = 'none';
+        stars = 0; // Or 1 for completion? Keeping 0 for "no medal" logic, but game might need 1 for unlock.
+        // Actually, usually completion unlocks next level regardless of stars.
+        // Let's stick to 0 stars for "no medal" to be strict, or 1 if we want to be nice.
+        // User guide says "completed with no medal".
     }
 
-    const difficultyMultiplier =
-        level.difficulty === 'easy' ? 1 :
-            level.difficulty === 'medium' ? 1.5 :
-                level.difficulty === 'hard' ? 2 :
-                    2.5; // expert
+    // Note: Hint penalty is applied in the game component, not here.
 
-    const score = Math.floor((baseScore + timeBonus) * difficultyMultiplier);
-
-    return { score, stars, timeBonus };
+    return {
+        score: baseScore + timeBonus,
+        stars,
+        timeBonus,
+        medal
+    };
 }

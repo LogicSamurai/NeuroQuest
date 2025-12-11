@@ -114,9 +114,9 @@ export function generateZipLevelData(date: string) {
                     emoji: '📅',
                 },
                 timeTargets: {
-                    gold: 30,
-                    silver: 60,
-                    bronze: 90,
+                    gold: totalCells * 2,
+                    silver: totalCells * 3,
+                    bronze: totalCells * 4,
                 }
             };
         }
