@@ -15,29 +15,48 @@ async function generateDaily() {
     console.log(`Generating daily puzzles for ${today}...`);
 
     // Check if already generated
-    const existing = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.date, today));
-    if (existing.length > 0) {
-        console.log('Daily puzzles already exist for today.');
+    // Check if Zip daily exists
+    const existingZip = await db.select().from(dailyPuzzles).where(and(
+        eq(dailyPuzzles.date, today),
+        eq(dailyPuzzles.gameId, 'zip-path')
+    ));
+
+    // Check if Alchemy daily exists
+    const existingAlchemy = await db.select().from(dailyPuzzles).where(and(
+        eq(dailyPuzzles.date, today),
+        eq(dailyPuzzles.gameId, 'alchemy-logic')
+    ));
+
+    if (existingZip.length > 0 && existingAlchemy.length > 0) {
+        console.log('All daily puzzles already exist for today.');
         process.exit(0);
     }
 
     // 1. Generate Zip Path Daily
-    console.log('Generating Zip Path daily...');
-    const zipLevel = await generateZipLevel(today);
-    await db.insert(dailyPuzzles).values({
-        date: today,
-        gameId: 'zip-path',
-        levelId: zipLevel.id,
-    });
+    if (existingZip.length === 0) {
+        console.log('Generating Zip Path daily...');
+        const zipLevel = await generateZipLevel(today);
+        await db.insert(dailyPuzzles).values({
+            date: today,
+            gameId: 'zip-path',
+            levelId: zipLevel.id,
+        });
+    } else {
+        console.log('Zip Path daily already exists.');
+    }
 
     // 2. Generate Alchemy Daily
-    console.log('Generating Alchemy daily...');
-    const alchemyLevel = await generateAlchemyLevel(today);
-    await db.insert(dailyPuzzles).values({
-        date: today,
-        gameId: 'alchemy-logic',
-        levelId: alchemyLevel.id,
-    });
+    if (existingAlchemy.length === 0) {
+        console.log('Generating Alchemy daily...');
+        const alchemyLevel = await generateAlchemyLevel(today);
+        await db.insert(dailyPuzzles).values({
+            date: today,
+            gameId: 'alchemy-logic',
+            levelId: alchemyLevel.id,
+        });
+    } else {
+        console.log('Alchemy daily already exists.');
+    }
 
     console.log('Daily puzzles generated successfully!');
     process.exit(0);

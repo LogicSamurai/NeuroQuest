@@ -138,7 +138,7 @@ export async function getUserLevel(userId: string) {
 }
 
 // Handle daily login bonus
-export async function handleDailyLogin(userId: string) {
+export async function handleDailyLogin(userId: string, isGameCompletion: boolean = false) {
     const user = await db.select().from(users).where(eq(users.id, userId)).limit(1).then(res => res[0]);
     if (!user) return null;
 
@@ -151,50 +151,135 @@ export async function handleDailyLogin(userId: string) {
     }
 
     // Calculate new streak
-    let newStreak = 1;
+    let newStreak = user.currentStreak || 0;
+    let freezeUsed = false;
+    let freezesRemaining = user.streakFreezes || 0;
+    let shouldUpdateDate = false;
+
     if (lastLogin) {
         const lastDate = new Date(lastLogin);
         const todayDate = new Date(today);
         const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
 
         if (diffDays === 1) {
-            // Consecutive day - extend streak
-            newStreak = (user.currentStreak || 0) + 1;
+            // Consecutive day
+            if (isGameCompletion) {
+                newStreak += 1;
+                shouldUpdateDate = true;
+            }
+            // If not game completion, streak remains same, date remains same (until game played)
+            // Actually, for consecutive day, we probably want to update date ONLY if game played?
+            // Wait, if they visit, we don't want to break streak, but we don't want to increment.
+            // If we don't update date, tomorrow diffDays will be 2.
+            // So we MUST update date on visit to "mark as seen", OR we accept that visit doesn't count.
+            // User said: "reseted to zero and then when user solves any challeneges or like that then only increase the streak"
+            // This implies visit DOES NOT count for streak maintenance?
+            // "streak not breaking as well as stresk freeze is not getting used" -> original issue.
+            // "no it should be reseted to zero and then when user solves any challeneges or like that then only increase the streak like that.."
+            // This implies:
+            // 1. If I visit today (diff=1), streak is NOT incremented.
+            // 2. If I DON'T play today, and come tomorrow (diff=2), streak BREAKS.
+            // So visiting ALONE does NOT save the streak?
+            // Usually in these apps, visiting KEEPS the streak alive (maintenance) but maybe doesn't increment?
+            // OR, you HAVE to play to keep it alive.
+            // Let's assume: You HAVE to play to keep it alive.
+            // So visiting does NOTHING to the streak state if it's currently valid.
+            // But if it's BROKEN (diff > 1), we need to reset it to 0 immediately on visit.
+        } else if (diffDays > 1) {
+            // Streak broken
+            if (freezesRemaining > 0) {
+                // Use freeze to save streak
+                freezeUsed = true;
+                freezesRemaining--;
+
+                // If we use a freeze, we effectively "fill in" the missing day(s).
+                // We set lastLoginDate to YESTERDAY so that today becomes a consecutive day.
+                const yesterday = new Date(todayDate);
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+                // Update DB immediately for the freeze use
+                await db.update(users).set({
+                    lastLoginDate: yesterdayStr,
+                    streakFreezes: freezesRemaining,
+                    updatedAt: new Date(),
+                }).where(eq(users.id, userId));
+
+                // Now behave as if consecutive
+                if (isGameCompletion) {
+                    newStreak += 1;
+                    shouldUpdateDate = true;
+                }
+            } else {
+                // No freezes, reset to 0
+                newStreak = 0;
+                // Update DB immediately to reset streak
+                await db.update(users).set({
+                    currentStreak: 0,
+                    updatedAt: new Date(),
+                }).where(eq(users.id, userId));
+
+                if (isGameCompletion) {
+                    newStreak = 1;
+                    shouldUpdateDate = true;
+                }
+            }
         }
-        // If diffDays > 1, streak resets to 1
+    } else {
+        // First ever login
+        if (isGameCompletion) {
+            newStreak = 1;
+            shouldUpdateDate = true;
+        } else {
+            newStreak = 0;
+        }
     }
 
-    const longestStreak = Math.max(user.longestStreak || 0, newStreak);
+    // Only update main streak/date if game completed
+    if (shouldUpdateDate) {
+        const longestStreak = Math.max(user.longestStreak || 0, newStreak);
 
-    // Update user
-    await db
-        .update(users)
-        .set({
-            lastLoginDate: today,
-            currentStreak: newStreak,
+        await db
+            .update(users)
+            .set({
+                lastLoginDate: today,
+                currentStreak: newStreak,
+                longestStreak,
+                updatedAt: new Date(),
+            })
+            .where(eq(users.id, userId));
+
+        // Award XP only on game completion
+        const loginXp = XP_AWARDS.dailyLogin;
+        const streakXp = XP_AWARDS.streakBonus(newStreak);
+        const totalXp = loginXp + streakXp;
+
+        const result = await awardXp(userId, totalXp, 'login', {
+            loginXp,
+            streakXp,
+            streak: newStreak,
+            freezeUsed,
+        });
+
+        return {
+            alreadyLoggedIn: false,
+            streak: newStreak,
             longestStreak,
-            updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-
-    // Award XP for login
-    const loginXp = XP_AWARDS.dailyLogin;
-    const streakXp = XP_AWARDS.streakBonus(newStreak);
-    const totalXp = loginXp + streakXp;
-
-    const result = await awardXp(userId, totalXp, 'login', {
-        loginXp,
-        streakXp,
-        streak: newStreak,
-    });
+            xpAwarded: totalXp,
+            leveledUp: result.leveledUp,
+            newLevel: result.newLevel,
+            freezeUsed,
+        };
+    }
 
     return {
         alreadyLoggedIn: false,
         streak: newStreak,
-        longestStreak,
-        xpAwarded: totalXp,
-        leveledUp: result.leveledUp,
-        newLevel: result.newLevel,
+        longestStreak: user.longestStreak || 0,
+        xpAwarded: 0,
+        leveledUp: false,
+        newLevel: user.level || 1,
+        freezeUsed,
     };
 }
 

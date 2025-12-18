@@ -72,7 +72,7 @@ export async function saveGameSession(
     });
 
     // Handle daily login (check streak)
-    const loginResult = await handleDailyLogin(userId);
+    const loginResult = await handleDailyLogin(userId, true);
 
     // Increment global game count
     await incrementGlobalGameCount();
@@ -245,7 +245,7 @@ export async function getHomepageData() {
     if (!userId) return null;
 
     // Handle daily login first (might update streaks/xp)
-    // await handleDailyLogin(userId); // Removed to prevent streak update on visit
+    await handleDailyLogin(userId, false); // Check streak status on visit
 
     const getCachedLeaderboard = unstable_cache(
         async () => getTopPlayersPreview('combined', 5),
